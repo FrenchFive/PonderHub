@@ -8,6 +8,7 @@ import {
   getWord,
   getCategories,
   getSources,
+  getAllLinkedWordSuggestions,
 } from './storage';
 import { createIcons,
   ArrowLeft, Plus, Search, Pencil, Trash2, ChevronRight, BookOpen,
@@ -86,68 +87,148 @@ function randomEmoji(): string {
   return EMOJI_PICKS[Math.floor(Math.random() * EMOJI_PICKS.length)];
 }
 
-/** Generates random bright background blobs for memo stage */
-function buildMemoBlobs(): string {
-  // Multi-color gradient pairs for vibrant blobs
-  const gradients = [
-    ['#ff6bd6', '#ffbd59'],           // pink → yellow
-    ['#cb5cff', '#ff6bd6'],            // purple → pink
-    ['#00e5ff', '#76ff7a'],           // cyan → green
-    ['#ff6b6b', '#ffbd59'],           // coral → amber
-    ['#536dfe', '#00e5ff'],           // indigo → cyan
-    ['#e040fb', '#7c4dff'],           // magenta → violet
-    ['#00e5ff', '#69f0ae'],           // cyan → mint
-    ['#ffab40', '#ff6e40', '#ff3d71'],// orange → red-pink
-    ['#76ff7a', '#00e5ff', '#536dfe'],// green → cyan → indigo
-    ['#ff6bd6', '#cb5cff', '#536dfe'], // pink → purple → indigo
-  ];
+// Multi-color gradient pairs for vibrant blobs
+const BLOB_GRADIENTS = [
+  ['#ff6bd6', '#ffbd59'],           // pink → yellow
+  ['#cb5cff', '#ff6bd6'],            // purple → pink
+  ['#00e5ff', '#76ff7a'],           // cyan → green
+  ['#ff6b6b', '#ffbd59'],           // coral → amber
+  ['#536dfe', '#00e5ff'],           // indigo → cyan
+  ['#e040fb', '#7c4dff'],           // magenta → violet
+  ['#00e5ff', '#69f0ae'],           // cyan → mint
+  ['#ffab40', '#ff6e40', '#ff3d71'],// orange → red-pink
+  ['#76ff7a', '#00e5ff', '#536dfe'],// green → cyan → indigo
+  ['#ff6bd6', '#cb5cff', '#536dfe'], // pink → purple → indigo
+];
 
-  const count = 4 + Math.floor(Math.random() * 3); // 4-6 blobs
+// Non-overlapping zones for blob placement
+const BLOB_ZONES = [
+  { x: -10, y: -10 },  // top-left
+  { x: 55, y: -10 },   // top-right
+  { x: -10, y: 65 },   // bottom-left
+  { x: 55, y: 65 },    // bottom-right
+  { x: 20, y: 25 },    // center
+];
+
+const MEMO_BLOB_COUNT = 3;
+
+/** Builds placeholder blob elements (styles applied separately via applyBlobStyles) */
+function buildMemoBlobs(): string {
   let html = '';
-  for (let i = 0; i < count; i++) {
-    const grad = gradients[Math.floor(Math.random() * gradients.length)];
+  for (let i = 0; i < MEMO_BLOB_COUNT; i++) {
+    html += `<span class="memo-blob" id="memo-blob-${i}" aria-hidden="true"></span>`;
+  }
+  return html;
+}
+
+/** Apply randomized styles to existing blob elements. If animate=true, transitions are used. */
+function applyBlobStyles(animate: boolean): void {
+  const shuffled = [...BLOB_ZONES].sort(() => Math.random() - 0.5);
+
+  for (let i = 0; i < MEMO_BLOB_COUNT; i++) {
+    const el = document.getElementById(`memo-blob-${i}`);
+    if (!el) continue;
+
+    const grad = BLOB_GRADIENTS[Math.floor(Math.random() * BLOB_GRADIENTS.length)];
     const angle = Math.floor(Math.random() * 360);
     const stops = grad.map((c, idx) =>
       `${c} ${Math.round((idx / (grad.length - 1)) * 100)}%`
     ).join(', ');
-    const background = `linear-gradient(${angle}deg, ${stops})`;
 
-    const size = 100 + Math.floor(Math.random() * 200); // 100-300px
-    const x = -15 + Math.floor(Math.random() * 110);
-    const y = -15 + Math.floor(Math.random() * 110);
+    const size = 220 + Math.floor(Math.random() * 230); // 220-450px
+    const zone = shuffled[i];
+    const x = zone.x + Math.floor(Math.random() * 16 - 8);
+    const y = zone.y + Math.floor(Math.random() * 16 - 8);
 
-    // Organic shape with 8-value border-radius
     const r = () => 30 + Math.floor(Math.random() * 45);
     const borderRadius = `${r()}% ${r()}% ${r()}% ${r()}% / ${r()}% ${r()}% ${r()}% ${r()}%`;
-
-    // Vary aspect ratio for some blobs
-    const scaleX = 0.7 + Math.random() * 0.6;
-    const scaleY = 0.7 + Math.random() * 0.6;
     const rotate = Math.floor(Math.random() * 360);
 
-    html += `<span class="memo-blob" style="
-      width: ${size}px;
-      height: ${size}px;
-      left: ${x}%;
-      top: ${y}%;
-      background: ${background};
-      border-radius: ${borderRadius};
-      transform: rotate(${rotate}deg) scale(${scaleX.toFixed(2)}, ${scaleY.toFixed(2)});
-    " aria-hidden="true"></span>`;
+    if (animate) {
+      el.style.transition = 'width 1.2s ease, height 1.2s ease, left 1.2s ease, top 1.2s ease, border-radius 1.2s ease, transform 1.2s ease';
+    } else {
+      el.style.transition = 'none';
+    }
+
+    el.style.width = `${size}px`;
+    el.style.height = `${size}px`;
+    el.style.left = `${x}%`;
+    el.style.top = `${y}%`;
+    el.style.background = `linear-gradient(${angle}deg, ${stops})`;
+    el.style.borderRadius = borderRadius;
+    el.style.transform = `rotate(${rotate}deg)`;
   }
-  return html;
 }
 
 /** Debounce timer for source suggestions */
 let sourceDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 
 function navigate(view: AppState['currentView'], wordId?: string): void {
+  const prev = state.currentView;
   state.currentView = view;
   state.selectedWordId = wordId ?? null;
   if (view === 'hub') { state.searchQuery = ''; state.filterCategory = ''; state.filterSource = ''; }
   if (view === 'add') formEmojiValue = '';
   if (view === 'memo' && !memoWord) pickNextMemoWord();
+  // Push browser history so Android back button / browser back works
+  const historyState = { view, wordId: wordId ?? null };
+  if (prev === view && view === 'hub') {
+    // Avoid stacking hub entries
+    history.replaceState(historyState, '');
+  } else {
+    history.pushState(historyState, '');
+  }
   render();
+}
+
+/** Close any open overlay (emoji picker, dropdowns). Returns true if something was closed. */
+function closeOpenOverlays(): boolean {
+  let closed = false;
+  // Emoji picker
+  const emojiBackdrop = document.querySelector('.emoji-dialog-backdrop--open');
+  if (emojiBackdrop) {
+    emojiBackdrop.classList.remove('emoji-dialog-backdrop--open');
+    closed = true;
+  }
+  // Category dropdown
+  const catDropdown = document.querySelector('.cat-dropdown--open');
+  if (catDropdown) {
+    catDropdown.classList.remove('cat-dropdown--open');
+    closed = true;
+  }
+  // Filter dropdown
+  const filterDropdown = document.querySelector('.filter-dropdown--open');
+  if (filterDropdown) {
+    filterDropdown.classList.remove('filter-dropdown--open');
+    closed = true;
+  }
+  return closed;
+}
+
+/** Handle browser back button / Android back gesture */
+export function initHistoryNavigation(): void {
+  // Set initial state
+  history.replaceState({ view: state.currentView, wordId: state.selectedWordId }, '');
+
+  window.addEventListener('popstate', (e) => {
+    // First: close any open overlay without navigating
+    if (closeOpenOverlays()) {
+      // Re-push current state so the next back press navigates
+      history.pushState({ view: state.currentView, wordId: state.selectedWordId }, '');
+      return;
+    }
+
+    // If there's a saved state, restore it
+    if (e.state && e.state.view) {
+      state.currentView = e.state.view;
+      state.selectedWordId = e.state.wordId ?? null;
+      if (e.state.view === 'hub') { state.searchQuery = ''; state.filterCategory = ''; state.filterSource = ''; }
+      render();
+      return;
+    }
+
+    // No state — we're at the root, let the browser handle (exit app)
+  });
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -298,6 +379,27 @@ function renderSourceField(prefix: string, value = ''): string {
     </div>`;
 }
 
+function renderLinkedWordsField(prefix: string, linkedWords: string[] = []): string {
+  const chips = linkedWords.map(
+    (lw) => `<span class="linked-chip" data-value="${escapeHtml(lw)}">${escapeHtml(lw)} <button type="button" class="linked-chip__remove" data-action="remove-linked-word" data-target="${prefix}-linked" data-value="${escapeHtml(lw)}" aria-label="Remove">&times;</button></span>`,
+  ).join('');
+  return `
+    <div class="form-group">
+      <label class="form-label">
+        Linked Words <span class="hint">(synonyms, related)</span>
+      </label>
+      <input id="${prefix}-linked-hidden" type="hidden" name="linkedWords" value="${escapeHtml(linkedWords.join(','))}" />
+      <div class="linked-words-field" id="${prefix}-linked">
+        <div class="linked-chips" id="${prefix}-linked-chips">${chips}</div>
+        <div class="linked-input-wrap">
+          <input id="${prefix}-linked-input" class="form-input" type="text"
+            placeholder="Type to search or add…" autocomplete="off" />
+          <div class="linked-suggestions" id="${prefix}-linked-suggestions"></div>
+        </div>
+      </div>
+    </div>`;
+}
+
 // ── View builders ──────────────────────────────────────────────────────────
 
 function buildWordCardHtml(w: Word): string {
@@ -440,7 +542,12 @@ function buildAddView(): string {
         <div class="form-group">
           <label class="form-label" for="add-def">General Description <span class="hint">(optional)</span></label>
           <textarea id="add-def" class="form-textarea" name="definition"
-            placeholder="Add extra context, examples, personal notes…" rows="4"></textarea>
+            placeholder="Add extra context, personal notes…" rows="4"></textarea>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="add-example">Example <span class="hint">(optional)</span></label>
+          <textarea id="add-example" class="form-textarea" name="example"
+            placeholder="e.g. &quot;His epistemology was rooted in empiricism.&quot;" rows="2"></textarea>
         </div>
         ${renderSourceField('add')}
         ${renderCategoryField('add')}
@@ -449,6 +556,7 @@ function buildAddView(): string {
           <input id="add-tags" class="form-input" type="text" name="tags"
             placeholder="e.g. philosophy, knowledge" autocomplete="off" />
         </div>
+        ${renderLinkedWordsField('add')}
         <button type="button" class="btn btn-primary btn-full" data-action="submit-add">Save Word</button>
       </form>
     </section>`;
@@ -482,6 +590,21 @@ function buildDetailView(word: Word): string {
         <div class="detail__section">
           <h3 class="detail__section-label">General Description</h3>
           <div class="detail__definition">${escapeHtml(word.definition).replace(/\n/g, '<br>')}</div>
+        </div>` : ''}
+      ${word.example ? `
+        <div class="detail__section">
+          <h3 class="detail__section-label">Example</h3>
+          <div class="detail__example">"${escapeHtml(word.example)}"</div>
+        </div>` : ''}
+      ${word.linkedWords.length ? `
+        <div class="detail__section">
+          <h3 class="detail__section-label">Linked Words</h3>
+          <div class="detail__linked-words">${word.linkedWords.map((lw) => {
+            const linked = getAllWords().find((w) => w.term.toLowerCase() === lw.toLowerCase());
+            return linked
+              ? `<span class="linked-word-chip linked-word-chip--link" data-action="goto-detail" data-id="${escapeHtml(linked.id)}">${escapeHtml(lw)}</span>`
+              : `<span class="linked-word-chip">${escapeHtml(lw)}</span>`;
+          }).join('')}</div>
         </div>` : ''}
       ${word.source ? `
         <div class="detail__source">
@@ -533,6 +656,10 @@ function buildEditView(word: Word): string {
           <label class="form-label" for="edit-def">General Description <span class="hint">(optional)</span></label>
           <textarea id="edit-def" class="form-textarea" name="definition" rows="4">${escapeHtml(word.definition)}</textarea>
         </div>
+        <div class="form-group">
+          <label class="form-label" for="edit-example">Example <span class="hint">(optional)</span></label>
+          <textarea id="edit-example" class="form-textarea" name="example" rows="2">${escapeHtml(word.example)}</textarea>
+        </div>
         ${renderSourceField('edit', word.source)}
         ${renderCategoryField('edit', word.category)}
         <div class="form-group">
@@ -540,6 +667,7 @@ function buildEditView(word: Word): string {
           <input id="edit-tags" class="form-input" type="text" name="tags"
             value="${escapeHtml(word.tags.join(', '))}" />
         </div>
+        ${renderLinkedWordsField('edit', word.linkedWords)}
         <button type="button" class="btn btn-primary btn-full" data-action="submit-edit" data-id="${escapeHtml(word.id)}">Update Word</button>
       </form>
     </section>`;
@@ -571,17 +699,16 @@ function buildMemoView(): string {
         <div class="memo-reveal" id="memo-reveal">
           <span class="memo-reveal__emoji">${emojiDisplay}</span>
           <span class="memo-reveal__term">${escapeHtml(memoWord.term)}</span>
+          ${memoWord.example ? `<span class="memo-reveal__example">"${escapeHtml(memoWord.example)}"</span>` : ''}
           <span class="memo-reveal__hint">↑ swipe up for next</span>
         </div>
         <div class="memo-card" id="memo-card">
+          ${memoWord.category ? `<span class="memo-card__category">${escapeHtml(memoWord.category)}</span>` : ''}
           <span class="memo-card__type">${clueLabel}</span>
           <p class="memo-card__text">${escapeHtml(clueText)}</p>
           <span class="memo-card__hint">← swipe to reveal word →</span>
+          <span class="memo-card__chevron">${icon('chevron-up', '', 20)}</span>
         </div>
-      </div>
-      <div class="memo-up-hint">
-        ${icon('chevron-up', '', 18)}
-        <span>Swipe up for next card</span>
       </div>
     </section>`;
 }
@@ -672,16 +799,64 @@ function attachMemoTouchHandlers(): void {
         reveal.style.opacity = '1';
       }
     } else if (dir === 'y' && dy < -80) {
-      // Next card — slide up
+      // Next card — slide up, then morph blobs & update card content
       const el = memoRevealed ? reveal : card;
       if (el) {
         el.style.transition = ease;
         el.style.transform = 'translateY(-500px)';
         el.style.opacity = '0';
       }
+      // Start blob morph immediately while card slides out
+      applyBlobStyles(true);
       setTimeout(() => {
         pickNextMemoWord();
-        render();
+        if (!memoWord) { render(); return; }
+        // Update card content in-place
+        const clueText = memoShowField === 'meaning' ? memoWord.meaning : memoWord.definition;
+        const clueLabel = memoShowField === 'meaning' ? 'Meaning' : 'Description';
+        const emojiDisplay = memoWord.emoji || '📄';
+        const typeEl = document.querySelector('.memo-card__type');
+        const textEl = document.querySelector('.memo-card__text');
+        const catEl = document.querySelector('.memo-card__category');
+        const revealEmoji = document.querySelector('.memo-reveal__emoji');
+        const revealTerm = document.querySelector('.memo-reveal__term');
+        const revealExample = document.querySelector('.memo-reveal__example');
+        if (typeEl) typeEl.textContent = clueLabel;
+        if (textEl) textEl.textContent = clueText;
+        if (catEl) {
+          if (memoWord.category) {
+            catEl.textContent = memoWord.category;
+            (catEl as HTMLElement).style.display = '';
+          } else {
+            (catEl as HTMLElement).style.display = 'none';
+          }
+        }
+        if (revealEmoji) revealEmoji.textContent = emojiDisplay;
+        if (revealTerm) revealTerm.textContent = memoWord.term;
+        if (revealExample) {
+          if (memoWord.example) {
+            revealExample.textContent = `"${memoWord.example}"`;
+            (revealExample as HTMLElement).style.display = '';
+          } else {
+            (revealExample as HTMLElement).style.display = 'none';
+          }
+        }
+        // Reset card position
+        if (card) {
+          card.style.transition = 'none';
+          card.style.transform = 'translateY(500px)';
+          card.style.opacity = '0';
+          void card.offsetHeight; // force reflow
+          card.style.transition = ease;
+          card.style.transform = 'translateX(0) rotate(0deg)';
+          card.style.opacity = '1';
+        }
+        // Reset reveal
+        if (reveal) {
+          reveal.style.transition = 'none';
+          reveal.style.opacity = '0';
+          reveal.style.transform = 'translateY(0)';
+        }
       }, 300);
     } else {
       // Snap back
@@ -832,6 +1007,64 @@ function attachEventListeners(): void {
     });
   });
 
+  // Linked words input — suggestions + enter-to-add
+  document.querySelectorAll<HTMLInputElement>('[id$="-linked-input"]').forEach((input) => {
+    const fieldId = input.id.replace('-input', '');
+    const hiddenInput = document.getElementById(`${fieldId}-hidden`) as HTMLInputElement | null;
+    const chipsEl = document.getElementById(`${fieldId}-chips`);
+    const suggestionsEl = document.getElementById(`${fieldId}-suggestions`);
+    if (!hiddenInput || !chipsEl || !suggestionsEl) return;
+
+    function getCurrentLinked(): string[] {
+      return hiddenInput!.value ? hiddenInput!.value.split(',').filter(Boolean) : [];
+    }
+
+    function addLinkedWord(word: string): void {
+      const trimmed = word.trim();
+      if (!trimmed) return;
+      const current = getCurrentLinked();
+      if (current.some((w) => w.toLowerCase() === trimmed.toLowerCase())) return;
+      current.push(trimmed);
+      hiddenInput!.value = current.join(',');
+      const chip = document.createElement('span');
+      chip.className = 'linked-chip';
+      chip.dataset.value = trimmed;
+      chip.innerHTML = `${escapeHtml(trimmed)} <button type="button" class="linked-chip__remove" data-action="remove-linked-word" data-target="${fieldId}" data-value="${escapeHtml(trimmed)}" aria-label="Remove">&times;</button>`;
+      chipsEl!.appendChild(chip);
+      input.value = '';
+      suggestionsEl!.innerHTML = '';
+    }
+
+    input.addEventListener('input', () => {
+      const val = input.value.trim().toLowerCase();
+      if (val.length < 1) { suggestionsEl!.innerHTML = ''; return; }
+      const current = getCurrentLinked();
+      const allSuggestions = getAllLinkedWordSuggestions();
+      const matches = allSuggestions.filter((s) =>
+        s.toLowerCase().includes(val) && !current.some((c) => c.toLowerCase() === s.toLowerCase()),
+      ).slice(0, 6);
+      suggestionsEl!.innerHTML = matches.map((s) =>
+        `<button type="button" class="linked-suggestion" data-value="${escapeHtml(s)}">${escapeHtml(s)}</button>`,
+      ).join('');
+    });
+
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        addLinkedWord(input.value);
+      }
+    });
+
+    suggestionsEl.addEventListener('click', (e) => {
+      const btn = (e.target as HTMLElement).closest('.linked-suggestion') as HTMLElement | null;
+      if (btn) addLinkedWord(btn.dataset.value || '');
+    });
+
+    input.addEventListener('blur', () => {
+      setTimeout(() => { suggestionsEl!.innerHTML = ''; }, 200);
+    });
+  });
+
   // Click / keyboard delegation
   app.addEventListener('click', handleAction);
   app.addEventListener('keydown', (e) => {
@@ -841,8 +1074,9 @@ function attachEventListeners(): void {
     }
   });
 
-  // Memo card touch gestures
+  // Memo card touch gestures + initial blob styles
   if (state.currentView === 'memo') {
+    applyBlobStyles(false);
     attachMemoTouchHandlers();
   }
 
@@ -1030,6 +1264,19 @@ function handleAction(e: MouseEvent): void {
       }
       break;
     }
+    case 'remove-linked-word': {
+      const fieldId = target.dataset.target;
+      const val = target.dataset.value;
+      if (!fieldId || !val) break;
+      const hiddenInput = document.getElementById(`${fieldId}-hidden`) as HTMLInputElement | null;
+      if (hiddenInput) {
+        const current = hiddenInput.value.split(',').filter((w) => w !== val);
+        hiddenInput.value = current.join(',');
+      }
+      const chip = target.closest('.linked-chip');
+      if (chip) chip.remove();
+      break;
+    }
     // select-emoji and close-emoji-picker handled by handleDialogAction (dialog is outside #app)
     case 'submit-add': {
       e.preventDefault();
@@ -1107,9 +1354,11 @@ function submitAddForm(form: HTMLFormElement): void {
   const termInput = form.querySelector<HTMLInputElement>('#add-term')!;
   const meaningInput = form.querySelector<HTMLTextAreaElement>('#add-meaning')!;
   const defInput = form.querySelector<HTMLTextAreaElement>('#add-def')!;
+  const exampleInput = form.querySelector<HTMLTextAreaElement>('#add-example')!;
   const categoryInput = form.querySelector<HTMLInputElement>('#add-category')!;
   const emojiInput = form.querySelector<HTMLInputElement>('#add-emoji')!;
   const tagsInput = form.querySelector<HTMLInputElement>('#add-tags')!;
+  const linkedInput = form.querySelector<HTMLInputElement>('#add-linked-hidden')!;
   const sourceInput = form.querySelector<HTMLInputElement>('#add-source')!;
 
   let valid = true;
@@ -1127,13 +1376,16 @@ function submitAddForm(form: HTMLFormElement): void {
   }
   if (!valid) return;
 
+  const linkedWords = linkedInput.value ? linkedInput.value.split(',').filter(Boolean) : [];
   addWord(
     termInput.value,
     meaningInput.value,
     defInput.value,
+    exampleInput.value,
     categoryInput.value,
     emojiInput.value,
     parseTags(tagsInput.value),
+    linkedWords,
     sourceInput.value,
   );
   navigate('hub');
@@ -1143,9 +1395,11 @@ function submitEditForm(form: HTMLFormElement, wordId: string): void {
   const termInput = form.querySelector<HTMLInputElement>('#edit-term')!;
   const meaningInput = form.querySelector<HTMLTextAreaElement>('#edit-meaning')!;
   const defInput = form.querySelector<HTMLTextAreaElement>('#edit-def')!;
+  const exampleInput = form.querySelector<HTMLTextAreaElement>('#edit-example')!;
   const categoryInput = form.querySelector<HTMLInputElement>('#edit-category')!;
   const emojiInput = form.querySelector<HTMLInputElement>('#edit-emoji')!;
   const tagsInput = form.querySelector<HTMLInputElement>('#edit-tags')!;
+  const linkedInput = form.querySelector<HTMLInputElement>('#edit-linked-hidden')!;
   const sourceInput = form.querySelector<HTMLInputElement>('#edit-source')!;
 
   let valid = true;
@@ -1157,14 +1411,17 @@ function submitEditForm(form: HTMLFormElement, wordId: string): void {
   }
   if (!valid) return;
 
+  const linkedWords = linkedInput.value ? linkedInput.value.split(',').filter(Boolean) : [];
   updateWord(
     wordId,
     termInput.value,
     meaningInput.value,
     defInput.value,
+    exampleInput.value,
     categoryInput.value,
     emojiInput.value,
     parseTags(tagsInput.value),
+    linkedWords,
     sourceInput.value,
   );
   navigate('detail', wordId);

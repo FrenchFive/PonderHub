@@ -3,9 +3,11 @@ export interface Word {
   term: string;
   meaning: string;     // core meaning of the word (required)
   definition: string;  // general description (optional)
+  example: string;     // usage example sentence (optional)
   category: string;  // user-defined category, '' = uncategorized
   emoji: string;     // lucide icon name (legacy: emoji character), '' = none
   tags: string[];
+  linkedWords: string[];  // related/similar/synonym word IDs
   source: string;    // where the word was learned from, '' = none
   createdAt: number;
   updatedAt: number;
