@@ -112,6 +112,10 @@ html, body {
   flex: 1;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
+  padding-top: var(--safe-top);
+}
+
+.main-content--full {
   padding-bottom: var(--safe-bottom);
 }
 
@@ -839,4 +843,191 @@ html, body {
 .detail__meta-item svg {
   flex-shrink: 0;
   opacity: .6;
+}
+
+/* ── Bottom navigation ─────────────────────────────────────────────────── */
+.bottom-nav {
+  display: flex;
+  align-items: stretch;
+  background: var(--bg);
+  padding: 6px 24px;
+  padding-bottom: calc(6px + var(--safe-bottom));
+  flex-shrink: 0;
+  border-top: 1px solid var(--border);
+}
+
+.nav-tab {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  padding: 8px 0;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: .68rem;
+  font-weight: 600;
+  font-family: var(--font);
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  transition: color .2s, background .2s;
+}
+
+.nav-tab--active {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.nav-tab svg {
+  width: 22px;
+  height: 22px;
+}
+
+/* ── Memo view ─────────────────────────────────────────────────────────── */
+.memo-view {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 0;
+  overflow: hidden;
+}
+
+.memo-stage {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  touch-action: none;
+  overflow: hidden;
+  padding: 24px;
+}
+
+.memo-reveal {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  opacity: 0;
+  transition: opacity .3s;
+}
+
+.memo-reveal__emoji {
+  font-size: 3rem;
+  width: 80px;
+  height: 80px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--accent-soft);
+  border-radius: 22px;
+  box-shadow: var(--neu-raised);
+}
+
+.memo-reveal__term {
+  font-size: 1.8rem;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: -.5px;
+  text-align: center;
+}
+
+.memo-reveal__hint {
+  font-size: .78rem;
+  color: var(--text-secondary);
+  opacity: .6;
+  margin-top: 8px;
+}
+
+.memo-card {
+  width: 100%;
+  max-width: 320px;
+  min-height: 240px;
+  background: var(--surface);
+  border-radius: 24px;
+  padding: 32px 24px;
+  box-shadow: var(--neu-raised);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  position: relative;
+  z-index: 1;
+  will-change: transform, opacity;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.memo-card__type {
+  font-size: .72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .1em;
+  color: var(--accent);
+  background: var(--accent-soft);
+  padding: 4px 14px;
+  border-radius: 100px;
+}
+
+.memo-card__text {
+  font-size: 1rem;
+  line-height: 1.7;
+  color: var(--text);
+  text-align: center;
+  overflow-y: auto;
+  max-height: 200px;
+}
+
+.memo-card__hint {
+  font-size: .75rem;
+  color: var(--text-secondary);
+  opacity: .5;
+}
+
+.memo-up-hint {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 12px 16px 16px;
+  color: var(--text-secondary);
+  font-size: .75rem;
+  font-weight: 500;
+  opacity: .45;
+}
+
+.memo-up-hint svg {
+  animation: memo-bounce 2s ease-in-out infinite;
+}
+
+@keyframes memo-bounce {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
+}
+
+.memo-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 12px;
+  padding: 48px 24px;
+  flex: 1;
+}
+
+.memo-empty__icon {
+  font-size: 3rem;
+  opacity: .4;
+}
+
+.memo-empty p {
+  color: var(--text-secondary);
+  font-size: .92rem;
+  line-height: 1.5;
 }
