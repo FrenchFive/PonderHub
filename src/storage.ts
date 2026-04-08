@@ -35,6 +35,14 @@ export function getCategories(): string[] {
   return [...new Set(cats)].sort((a, b) => a.localeCompare(b));
 }
 
+/** Returns all unique, non-empty sources in use, sorted alphabetically. */
+export function getSources(): string[] {
+  const sources = getAllWords()
+    .map((w) => w.source.trim())
+    .filter(Boolean);
+  return [...new Set(sources)].sort((a, b) => a.localeCompare(b));
+}
+
 export function addWord(
   term: string,
   meaning: string,
