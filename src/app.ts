@@ -39,10 +39,18 @@ const state: AppState = {
   searchQuery: '',
 };
 
+/** The icon currently chosen in the add/edit form (kept outside DOM for dialog sync) */
+let formIconValue = '';
+
+function randomIcon(): string {
+  return ICON_PICKS[Math.floor(Math.random() * ICON_PICKS.length)];
+}
+
 function navigate(view: AppState['currentView'], wordId?: string): void {
   state.currentView = view;
   state.selectedWordId = wordId ?? null;
   if (view === 'hub') state.searchQuery = '';
+  if (view === 'add') formIconValue = '';  // will be assigned a random icon in buildAddView
   render();
 }
 
@@ -95,20 +103,42 @@ function isLucideIcon(name: string): boolean {
   return ICON_PICKS.includes(name);
 }
 
-function renderIconField(prefix: string, value = ''): string {
-  const picks = ICON_PICKS.map(
-    (name) =>
-      `<button type="button" class="icon-pick-btn ${value === name ? 'icon-pick-btn--selected' : ''}"
-         data-action="pick-icon" data-icon="${name}" data-target="${prefix}-icon"
-         aria-label="${name}">${icon(name, '', 22)}</button>`,
-  ).join('');
+function renderIconField(prefix: string, value: string): string {
+  const displayIcon = isLucideIcon(value) ? value : 'file-text';
   return `
     <div class="form-group">
-      <label class="form-label">
-        Icon <span class="hint">(optional)</span>
-      </label>
+      <label class="form-label">Icon</label>
       <input id="${prefix}-icon" type="hidden" name="icon" value="${escapeHtml(value)}" />
-      <div class="icon-picker">${picks}</div>
+      <button type="button" class="icon-trigger" data-action="open-icon-picker" data-target="${prefix}-icon" aria-label="Choose icon">
+        <span class="icon-trigger__preview">${icon(displayIcon, '', 28)}</span>
+        <span class="icon-trigger__label">Tap to change</span>
+        ${icon('chevron-right', 'icon-trigger__arrow', 16)}
+      </button>
+    </div>`;
+}
+
+function buildIconDialog(currentValue: string, targetId: string): string {
+  const items = ICON_PICKS.map(
+    (name) =>
+      `<button type="button" class="dialog-icon-btn ${currentValue === name ? 'dialog-icon-btn--selected' : ''}"
+         data-action="select-icon" data-icon="${name}" data-target="${targetId}"
+         aria-label="${name}">
+        ${icon(name, '', 26)}
+        <span class="dialog-icon-btn__name">${name.replace(/-/g, ' ')}</span>
+      </button>`,
+  ).join('');
+
+  return `
+    <div class="icon-dialog-backdrop" data-action="close-icon-picker">
+      <div class="icon-dialog" role="dialog" aria-label="Choose an icon">
+        <div class="icon-dialog__header">
+          <span class="icon-dialog__title">Choose Icon</span>
+          <button type="button" class="icon-dialog__close" data-action="close-icon-picker" aria-label="Close">
+            ${icon('arrow-left', '', 20)}
+          </button>
+        </div>
+        <div class="icon-dialog__grid">${items}</div>
+      </div>
     </div>`;
 }
 
@@ -207,6 +237,8 @@ function buildHubView(): string {
 }
 
 function buildAddView(): string {
+  // Assign a random icon for new words
+  if (!formIconValue) formIconValue = randomIcon();
   return `
     <section class="view" id="view-add">
       <div class="view-header">
@@ -216,6 +248,7 @@ function buildAddView(): string {
       </div>
       <h2 class="view-title">Add a Word</h2>
       <form class="word-form" data-action="submit-add" novalidate>
+        ${renderIconField('add', formIconValue)}
         <div class="form-group">
           <label class="form-label" for="add-term">Word / Expression <span class="required">*</span></label>
           <input id="add-term" class="form-input" type="text" name="term"
@@ -230,7 +263,6 @@ function buildAddView(): string {
         </div>
         ${renderSourceField('add')}
         ${renderCategoryField('add')}
-        ${renderIconField('add')}
         <div class="form-group">
           <label class="form-label" for="add-tags">Tags <span class="hint">(comma separated)</span></label>
           <input id="add-tags" class="form-input" type="text" name="tags"
@@ -284,6 +316,7 @@ function buildDetailView(word: Word): string {
 }
 
 function buildEditView(word: Word): string {
+  formIconValue = isLucideIcon(word.emoji) ? word.emoji : randomIcon();
   return `
     <section class="view" id="view-edit">
       <div class="view-header">
@@ -293,6 +326,7 @@ function buildEditView(word: Word): string {
       </div>
       <h2 class="view-title">Edit Word</h2>
       <form class="word-form" data-action="submit-edit" data-id="${escapeHtml(word.id)}" novalidate>
+        ${renderIconField('edit', formIconValue)}
         <div class="form-group">
           <label class="form-label" for="edit-term">Word / Expression <span class="required">*</span></label>
           <input id="edit-term" class="form-input" type="text" name="term"
@@ -306,7 +340,6 @@ function buildEditView(word: Word): string {
         </div>
         ${renderSourceField('edit', word.source)}
         ${renderCategoryField('edit', word.category)}
-        ${renderIconField('edit', word.emoji)}
         <div class="form-group">
           <label class="form-label" for="edit-tags">Tags <span class="hint">(comma separated)</span></label>
           <input id="edit-tags" class="form-input" type="text" name="tags"
@@ -420,6 +453,10 @@ function attachEventListeners(): void {
       handleAction(e as unknown as MouseEvent);
     }
   });
+
+  // Dialog lives outside #app — use a single global listener
+  document.removeEventListener('click', handleDialogAction);
+  document.addEventListener('click', handleDialogAction);
 }
 
 function handleAction(e: MouseEvent): void {
@@ -448,28 +485,25 @@ function handleAction(e: MouseEvent): void {
         navigate('hub');
       }
       break;
-    case 'pick-icon': {
-      const iconName = target.dataset.icon;
+    case 'open-icon-picker': {
       const targetInputId = target.dataset.target;
-      if (iconName && targetInputId) {
+      if (targetInputId) {
         const input = document.getElementById(targetInputId) as HTMLInputElement | null;
-        if (input) {
-          // Toggle: if already selected, deselect
-          if (input.value === iconName) {
-            input.value = '';
-            target.classList.remove('icon-pick-btn--selected');
-          } else {
-            input.value = iconName;
-            // Clear all selected, then mark this one
-            document.querySelectorAll<HTMLButtonElement>('.icon-pick-btn--selected').forEach((b) => {
-              b.classList.remove('icon-pick-btn--selected');
-            });
-            target.classList.add('icon-pick-btn--selected');
-          }
-        }
+        const currentVal = input?.value ?? '';
+        // Inject dialog into DOM
+        const existing = document.querySelector('.icon-dialog-backdrop');
+        if (existing) existing.remove();
+        const dialogHtml = buildIconDialog(currentVal, targetInputId);
+        document.body.insertAdjacentHTML('beforeend', dialogHtml);
+        createIcons({ icons: ICON_REGISTRY });
+        // Animate in
+        requestAnimationFrame(() => {
+          document.querySelector('.icon-dialog-backdrop')?.classList.add('icon-dialog-backdrop--open');
+        });
       }
       break;
     }
+    // select-icon and close-icon-picker handled by handleDialogAction (dialog is outside #app)
     case 'submit-add': {
       e.preventDefault();
       submitAddForm(target as HTMLFormElement);
@@ -480,6 +514,46 @@ function handleAction(e: MouseEvent): void {
       submitEditForm(target as HTMLFormElement, id!);
       break;
     }
+  }
+}
+
+function handleDialogAction(e: MouseEvent): void {
+  const el = e.target as HTMLElement;
+  // Only handle clicks inside the dialog backdrop
+  const backdrop = el.closest('.icon-dialog-backdrop');
+  if (!backdrop) return;
+
+  const target = el.closest('[data-action]') as HTMLElement | null;
+  if (!target) return;
+
+  const action = target.dataset.action;
+  if (action === 'select-icon') {
+    const iconName = target.dataset.icon;
+    const targetInputId = target.dataset.target;
+    if (iconName && targetInputId) {
+      const input = document.getElementById(targetInputId) as HTMLInputElement | null;
+      if (input) {
+        input.value = iconName;
+        formIconValue = iconName;
+        // Update the trigger preview
+        const trigger = document.querySelector('.icon-trigger__preview');
+        if (trigger) {
+          trigger.innerHTML = icon(iconName, '', 28);
+          createIcons({ icons: ICON_REGISTRY });
+        }
+      }
+    }
+    closeIconDialog();
+  } else if (action === 'close-icon-picker') {
+    closeIconDialog();
+  }
+}
+
+function closeIconDialog(): void {
+  const backdrop = document.querySelector('.icon-dialog-backdrop');
+  if (backdrop) {
+    backdrop.classList.remove('icon-dialog-backdrop--open');
+    setTimeout(() => backdrop.remove(), 200);
   }
 }
 
