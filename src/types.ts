@@ -3,13 +3,14 @@ export interface Word {
   term: string;
   definition: string;
   category: string;  // user-defined category, '' = uncategorized
-  emoji: string;     // single emoji or short string, '' = none
+  emoji: string;     // lucide icon name (legacy: emoji character), '' = none
   tags: string[];
+  source: string;    // where the word was learned from, '' = none
   createdAt: number;
   updatedAt: number;
 }
 
-export type View = 'hub' | 'add' | 'search' | 'detail' | 'edit';
+export type View = 'hub' | 'add' | 'detail' | 'edit';
 
 export interface AppState {
   currentView: View;
