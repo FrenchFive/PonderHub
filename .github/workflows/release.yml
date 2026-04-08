@@ -105,12 +105,6 @@ jobs:
         run: npm run build
 
       # ── Prepare Android platform ──
-      - name: Add Android platform (first run)
-        run: |
-          if [ ! -d "android" ]; then
-            npx cap add android
-          fi
-
       - name: Sync Capacitor
         run: npx cap sync android
 
