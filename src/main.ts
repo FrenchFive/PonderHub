@@ -1,4 +1,5 @@
 import './style.css';
-import { render } from './app';
+import { render, initHistoryNavigation } from './app';
 
 render();
+initHistoryNavigation();

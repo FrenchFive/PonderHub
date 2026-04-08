@@ -164,12 +164,71 @@ function applyBlobStyles(animate: boolean): void {
 let sourceDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 
 function navigate(view: AppState['currentView'], wordId?: string): void {
+  const prev = state.currentView;
   state.currentView = view;
   state.selectedWordId = wordId ?? null;
   if (view === 'hub') { state.searchQuery = ''; state.filterCategory = ''; state.filterSource = ''; }
   if (view === 'add') formEmojiValue = '';
   if (view === 'memo' && !memoWord) pickNextMemoWord();
+  // Push browser history so Android back button / browser back works
+  const historyState = { view, wordId: wordId ?? null };
+  if (prev === view && view === 'hub') {
+    // Avoid stacking hub entries
+    history.replaceState(historyState, '');
+  } else {
+    history.pushState(historyState, '');
+  }
   render();
+}
+
+/** Close any open overlay (emoji picker, dropdowns). Returns true if something was closed. */
+function closeOpenOverlays(): boolean {
+  let closed = false;
+  // Emoji picker
+  const emojiBackdrop = document.querySelector('.emoji-dialog-backdrop--open');
+  if (emojiBackdrop) {
+    emojiBackdrop.classList.remove('emoji-dialog-backdrop--open');
+    closed = true;
+  }
+  // Category dropdown
+  const catDropdown = document.querySelector('.cat-dropdown--open');
+  if (catDropdown) {
+    catDropdown.classList.remove('cat-dropdown--open');
+    closed = true;
+  }
+  // Filter dropdown
+  const filterDropdown = document.querySelector('.filter-dropdown--open');
+  if (filterDropdown) {
+    filterDropdown.classList.remove('filter-dropdown--open');
+    closed = true;
+  }
+  return closed;
+}
+
+/** Handle browser back button / Android back gesture */
+export function initHistoryNavigation(): void {
+  // Set initial state
+  history.replaceState({ view: state.currentView, wordId: state.selectedWordId }, '');
+
+  window.addEventListener('popstate', (e) => {
+    // First: close any open overlay without navigating
+    if (closeOpenOverlays()) {
+      // Re-push current state so the next back press navigates
+      history.pushState({ view: state.currentView, wordId: state.selectedWordId }, '');
+      return;
+    }
+
+    // If there's a saved state, restore it
+    if (e.state && e.state.view) {
+      state.currentView = e.state.view;
+      state.selectedWordId = e.state.wordId ?? null;
+      if (e.state.view === 'hub') { state.searchQuery = ''; state.filterCategory = ''; state.filterSource = ''; }
+      render();
+      return;
+    }
+
+    // No state — we're at the root, let the browser handle (exit app)
+  });
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────
