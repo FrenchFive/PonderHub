@@ -16,6 +16,8 @@ export function getAllWords(): Word[] {
       category: '',
       emoji: '',
       source: '',
+      example: '',
+      linkedWords: [],
       ...w,
     })) as Word[];
   } catch {
@@ -47,9 +49,11 @@ export function addWord(
   term: string,
   meaning: string,
   definition: string,
+  example: string,
   category: string,
   emoji: string,
   tags: string[],
+  linkedWords: string[],
   source: string,
 ): Word {
   const words = getAllWords();
@@ -59,9 +63,11 @@ export function addWord(
     term: term.trim(),
     meaning: meaning.trim(),
     definition: definition.trim(),
+    example: example.trim(),
     category: category.trim(),
     emoji: emoji.trim(),
     tags: tags.map((t) => t.trim()).filter(Boolean),
+    linkedWords,
     source: source.trim(),
     createdAt: now,
     updatedAt: now,
@@ -76,9 +82,11 @@ export function updateWord(
   term: string,
   meaning: string,
   definition: string,
+  example: string,
   category: string,
   emoji: string,
   tags: string[],
+  linkedWords: string[],
   source: string,
 ): Word | null {
   const words = getAllWords();
@@ -89,9 +97,11 @@ export function updateWord(
     term: term.trim(),
     meaning: meaning.trim(),
     definition: definition.trim(),
+    example: example.trim(),
     category: category.trim(),
     emoji: emoji.trim(),
     tags: tags.map((t) => t.trim()).filter(Boolean),
+    linkedWords,
     source: source.trim(),
     updatedAt: Date.now(),
   };
@@ -108,6 +118,17 @@ export function getWord(id: string): Word | null {
   return getAllWords().find((w) => w.id === id) ?? null;
 }
 
+/** Returns all terms + all linkedWords values used across all words, deduplicated and sorted. */
+export function getAllLinkedWordSuggestions(): string[] {
+  const words = getAllWords();
+  const set = new Set<string>();
+  for (const w of words) {
+    set.add(w.term);
+    for (const lw of w.linkedWords) set.add(lw);
+  }
+  return [...set].sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
+}
+
 export function searchWords(query: string): Word[] {
   const q = query.toLowerCase().trim();
   if (!q) return getAllWords();
@@ -116,6 +137,7 @@ export function searchWords(query: string): Word[] {
       w.term.toLowerCase().includes(q) ||
       w.meaning.toLowerCase().includes(q) ||
       w.definition.toLowerCase().includes(q) ||
+      w.example.toLowerCase().includes(q) ||
       w.category.toLowerCase().includes(q) ||
       w.tags.some((t) => t.toLowerCase().includes(q)) ||
       w.source.toLowerCase().includes(q),

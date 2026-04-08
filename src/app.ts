@@ -8,6 +8,7 @@ import {
   getWord,
   getCategories,
   getSources,
+  getAllLinkedWordSuggestions,
 } from './storage';
 import { createIcons,
   ArrowLeft, Plus, Search, Pencil, Trash2, ChevronRight, BookOpen,
@@ -319,6 +320,27 @@ function renderSourceField(prefix: string, value = ''): string {
     </div>`;
 }
 
+function renderLinkedWordsField(prefix: string, linkedWords: string[] = []): string {
+  const chips = linkedWords.map(
+    (lw) => `<span class="linked-chip" data-value="${escapeHtml(lw)}">${escapeHtml(lw)} <button type="button" class="linked-chip__remove" data-action="remove-linked-word" data-target="${prefix}-linked" data-value="${escapeHtml(lw)}" aria-label="Remove">&times;</button></span>`,
+  ).join('');
+  return `
+    <div class="form-group">
+      <label class="form-label">
+        Linked Words <span class="hint">(synonyms, related)</span>
+      </label>
+      <input id="${prefix}-linked-hidden" type="hidden" name="linkedWords" value="${escapeHtml(linkedWords.join(','))}" />
+      <div class="linked-words-field" id="${prefix}-linked">
+        <div class="linked-chips" id="${prefix}-linked-chips">${chips}</div>
+        <div class="linked-input-wrap">
+          <input id="${prefix}-linked-input" class="form-input" type="text"
+            placeholder="Type to search or add…" autocomplete="off" />
+          <div class="linked-suggestions" id="${prefix}-linked-suggestions"></div>
+        </div>
+      </div>
+    </div>`;
+}
+
 // ── View builders ──────────────────────────────────────────────────────────
 
 function buildWordCardHtml(w: Word): string {
@@ -461,7 +483,12 @@ function buildAddView(): string {
         <div class="form-group">
           <label class="form-label" for="add-def">General Description <span class="hint">(optional)</span></label>
           <textarea id="add-def" class="form-textarea" name="definition"
-            placeholder="Add extra context, examples, personal notes…" rows="4"></textarea>
+            placeholder="Add extra context, personal notes…" rows="4"></textarea>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="add-example">Example <span class="hint">(optional)</span></label>
+          <textarea id="add-example" class="form-textarea" name="example"
+            placeholder="e.g. &quot;His epistemology was rooted in empiricism.&quot;" rows="2"></textarea>
         </div>
         ${renderSourceField('add')}
         ${renderCategoryField('add')}
@@ -470,6 +497,7 @@ function buildAddView(): string {
           <input id="add-tags" class="form-input" type="text" name="tags"
             placeholder="e.g. philosophy, knowledge" autocomplete="off" />
         </div>
+        ${renderLinkedWordsField('add')}
         <button type="button" class="btn btn-primary btn-full" data-action="submit-add">Save Word</button>
       </form>
     </section>`;
@@ -503,6 +531,21 @@ function buildDetailView(word: Word): string {
         <div class="detail__section">
           <h3 class="detail__section-label">General Description</h3>
           <div class="detail__definition">${escapeHtml(word.definition).replace(/\n/g, '<br>')}</div>
+        </div>` : ''}
+      ${word.example ? `
+        <div class="detail__section">
+          <h3 class="detail__section-label">Example</h3>
+          <div class="detail__example">"${escapeHtml(word.example)}"</div>
+        </div>` : ''}
+      ${word.linkedWords.length ? `
+        <div class="detail__section">
+          <h3 class="detail__section-label">Linked Words</h3>
+          <div class="detail__linked-words">${word.linkedWords.map((lw) => {
+            const linked = getAllWords().find((w) => w.term.toLowerCase() === lw.toLowerCase());
+            return linked
+              ? `<span class="linked-word-chip linked-word-chip--link" data-action="goto-detail" data-id="${escapeHtml(linked.id)}">${escapeHtml(lw)}</span>`
+              : `<span class="linked-word-chip">${escapeHtml(lw)}</span>`;
+          }).join('')}</div>
         </div>` : ''}
       ${word.source ? `
         <div class="detail__source">
@@ -554,6 +597,10 @@ function buildEditView(word: Word): string {
           <label class="form-label" for="edit-def">General Description <span class="hint">(optional)</span></label>
           <textarea id="edit-def" class="form-textarea" name="definition" rows="4">${escapeHtml(word.definition)}</textarea>
         </div>
+        <div class="form-group">
+          <label class="form-label" for="edit-example">Example <span class="hint">(optional)</span></label>
+          <textarea id="edit-example" class="form-textarea" name="example" rows="2">${escapeHtml(word.example)}</textarea>
+        </div>
         ${renderSourceField('edit', word.source)}
         ${renderCategoryField('edit', word.category)}
         <div class="form-group">
@@ -561,6 +608,7 @@ function buildEditView(word: Word): string {
           <input id="edit-tags" class="form-input" type="text" name="tags"
             value="${escapeHtml(word.tags.join(', '))}" />
         </div>
+        ${renderLinkedWordsField('edit', word.linkedWords)}
         <button type="button" class="btn btn-primary btn-full" data-action="submit-edit" data-id="${escapeHtml(word.id)}">Update Word</button>
       </form>
     </section>`;
@@ -592,9 +640,11 @@ function buildMemoView(): string {
         <div class="memo-reveal" id="memo-reveal">
           <span class="memo-reveal__emoji">${emojiDisplay}</span>
           <span class="memo-reveal__term">${escapeHtml(memoWord.term)}</span>
+          ${memoWord.example ? `<span class="memo-reveal__example">"${escapeHtml(memoWord.example)}"</span>` : ''}
           <span class="memo-reveal__hint">↑ swipe up for next</span>
         </div>
         <div class="memo-card" id="memo-card">
+          ${memoWord.category ? `<span class="memo-card__category">${escapeHtml(memoWord.category)}</span>` : ''}
           <span class="memo-card__type">${clueLabel}</span>
           <p class="memo-card__text">${escapeHtml(clueText)}</p>
           <span class="memo-card__hint">← swipe to reveal word →</span>
@@ -708,12 +758,30 @@ function attachMemoTouchHandlers(): void {
         const emojiDisplay = memoWord.emoji || '📄';
         const typeEl = document.querySelector('.memo-card__type');
         const textEl = document.querySelector('.memo-card__text');
+        const catEl = document.querySelector('.memo-card__category');
         const revealEmoji = document.querySelector('.memo-reveal__emoji');
         const revealTerm = document.querySelector('.memo-reveal__term');
+        const revealExample = document.querySelector('.memo-reveal__example');
         if (typeEl) typeEl.textContent = clueLabel;
         if (textEl) textEl.textContent = clueText;
+        if (catEl) {
+          if (memoWord.category) {
+            catEl.textContent = memoWord.category;
+            (catEl as HTMLElement).style.display = '';
+          } else {
+            (catEl as HTMLElement).style.display = 'none';
+          }
+        }
         if (revealEmoji) revealEmoji.textContent = emojiDisplay;
         if (revealTerm) revealTerm.textContent = memoWord.term;
+        if (revealExample) {
+          if (memoWord.example) {
+            revealExample.textContent = `"${memoWord.example}"`;
+            (revealExample as HTMLElement).style.display = '';
+          } else {
+            (revealExample as HTMLElement).style.display = 'none';
+          }
+        }
         // Reset card position
         if (card) {
           card.style.transition = 'none';
@@ -877,6 +945,64 @@ function attachEventListeners(): void {
         const suggestionsEl = sourceInput.closest('.source-field')?.querySelector('.source-suggestions') as HTMLElement | null;
         if (suggestionsEl) suggestionsEl.innerHTML = '';
       }, 200);
+    });
+  });
+
+  // Linked words input — suggestions + enter-to-add
+  document.querySelectorAll<HTMLInputElement>('[id$="-linked-input"]').forEach((input) => {
+    const fieldId = input.id.replace('-input', '');
+    const hiddenInput = document.getElementById(`${fieldId}-hidden`) as HTMLInputElement | null;
+    const chipsEl = document.getElementById(`${fieldId}-chips`);
+    const suggestionsEl = document.getElementById(`${fieldId}-suggestions`);
+    if (!hiddenInput || !chipsEl || !suggestionsEl) return;
+
+    function getCurrentLinked(): string[] {
+      return hiddenInput!.value ? hiddenInput!.value.split(',').filter(Boolean) : [];
+    }
+
+    function addLinkedWord(word: string): void {
+      const trimmed = word.trim();
+      if (!trimmed) return;
+      const current = getCurrentLinked();
+      if (current.some((w) => w.toLowerCase() === trimmed.toLowerCase())) return;
+      current.push(trimmed);
+      hiddenInput!.value = current.join(',');
+      const chip = document.createElement('span');
+      chip.className = 'linked-chip';
+      chip.dataset.value = trimmed;
+      chip.innerHTML = `${escapeHtml(trimmed)} <button type="button" class="linked-chip__remove" data-action="remove-linked-word" data-target="${fieldId}" data-value="${escapeHtml(trimmed)}" aria-label="Remove">&times;</button>`;
+      chipsEl!.appendChild(chip);
+      input.value = '';
+      suggestionsEl!.innerHTML = '';
+    }
+
+    input.addEventListener('input', () => {
+      const val = input.value.trim().toLowerCase();
+      if (val.length < 1) { suggestionsEl!.innerHTML = ''; return; }
+      const current = getCurrentLinked();
+      const allSuggestions = getAllLinkedWordSuggestions();
+      const matches = allSuggestions.filter((s) =>
+        s.toLowerCase().includes(val) && !current.some((c) => c.toLowerCase() === s.toLowerCase()),
+      ).slice(0, 6);
+      suggestionsEl!.innerHTML = matches.map((s) =>
+        `<button type="button" class="linked-suggestion" data-value="${escapeHtml(s)}">${escapeHtml(s)}</button>`,
+      ).join('');
+    });
+
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        addLinkedWord(input.value);
+      }
+    });
+
+    suggestionsEl.addEventListener('click', (e) => {
+      const btn = (e.target as HTMLElement).closest('.linked-suggestion') as HTMLElement | null;
+      if (btn) addLinkedWord(btn.dataset.value || '');
+    });
+
+    input.addEventListener('blur', () => {
+      setTimeout(() => { suggestionsEl!.innerHTML = ''; }, 200);
     });
   });
 
@@ -1079,6 +1205,19 @@ function handleAction(e: MouseEvent): void {
       }
       break;
     }
+    case 'remove-linked-word': {
+      const fieldId = target.dataset.target;
+      const val = target.dataset.value;
+      if (!fieldId || !val) break;
+      const hiddenInput = document.getElementById(`${fieldId}-hidden`) as HTMLInputElement | null;
+      if (hiddenInput) {
+        const current = hiddenInput.value.split(',').filter((w) => w !== val);
+        hiddenInput.value = current.join(',');
+      }
+      const chip = target.closest('.linked-chip');
+      if (chip) chip.remove();
+      break;
+    }
     // select-emoji and close-emoji-picker handled by handleDialogAction (dialog is outside #app)
     case 'submit-add': {
       e.preventDefault();
@@ -1156,9 +1295,11 @@ function submitAddForm(form: HTMLFormElement): void {
   const termInput = form.querySelector<HTMLInputElement>('#add-term')!;
   const meaningInput = form.querySelector<HTMLTextAreaElement>('#add-meaning')!;
   const defInput = form.querySelector<HTMLTextAreaElement>('#add-def')!;
+  const exampleInput = form.querySelector<HTMLTextAreaElement>('#add-example')!;
   const categoryInput = form.querySelector<HTMLInputElement>('#add-category')!;
   const emojiInput = form.querySelector<HTMLInputElement>('#add-emoji')!;
   const tagsInput = form.querySelector<HTMLInputElement>('#add-tags')!;
+  const linkedInput = form.querySelector<HTMLInputElement>('#add-linked-hidden')!;
   const sourceInput = form.querySelector<HTMLInputElement>('#add-source')!;
 
   let valid = true;
@@ -1176,13 +1317,16 @@ function submitAddForm(form: HTMLFormElement): void {
   }
   if (!valid) return;
 
+  const linkedWords = linkedInput.value ? linkedInput.value.split(',').filter(Boolean) : [];
   addWord(
     termInput.value,
     meaningInput.value,
     defInput.value,
+    exampleInput.value,
     categoryInput.value,
     emojiInput.value,
     parseTags(tagsInput.value),
+    linkedWords,
     sourceInput.value,
   );
   navigate('hub');
@@ -1192,9 +1336,11 @@ function submitEditForm(form: HTMLFormElement, wordId: string): void {
   const termInput = form.querySelector<HTMLInputElement>('#edit-term')!;
   const meaningInput = form.querySelector<HTMLTextAreaElement>('#edit-meaning')!;
   const defInput = form.querySelector<HTMLTextAreaElement>('#edit-def')!;
+  const exampleInput = form.querySelector<HTMLTextAreaElement>('#edit-example')!;
   const categoryInput = form.querySelector<HTMLInputElement>('#edit-category')!;
   const emojiInput = form.querySelector<HTMLInputElement>('#edit-emoji')!;
   const tagsInput = form.querySelector<HTMLInputElement>('#edit-tags')!;
+  const linkedInput = form.querySelector<HTMLInputElement>('#edit-linked-hidden')!;
   const sourceInput = form.querySelector<HTMLInputElement>('#edit-source')!;
 
   let valid = true;
@@ -1206,14 +1352,17 @@ function submitEditForm(form: HTMLFormElement, wordId: string): void {
   }
   if (!valid) return;
 
+  const linkedWords = linkedInput.value ? linkedInput.value.split(',').filter(Boolean) : [];
   updateWord(
     wordId,
     termInput.value,
     meaningInput.value,
     defInput.value,
+    exampleInput.value,
     categoryInput.value,
     emojiInput.value,
     parseTags(tagsInput.value),
+    linkedWords,
     sourceInput.value,
   );
   navigate('detail', wordId);
