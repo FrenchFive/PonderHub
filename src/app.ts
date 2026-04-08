@@ -27,6 +27,26 @@ const EMOJI_PICKS = [
   '💬','🫀','🪐','🧬','📐','🎲','🔮','🍀','🕊️','🧿',
 ];
 
+// ── Custom emoji persistence ────────────────────────────────────────────────
+const CUSTOM_EMOJI_KEY = 'ponderhub_custom_emojis';
+
+function getCustomEmojis(): string[] {
+  try {
+    const raw = localStorage.getItem(CUSTOM_EMOJI_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+function addCustomEmoji(emoji: string): void {
+  const emojis = getCustomEmojis();
+  if (!emojis.includes(emoji)) {
+    emojis.unshift(emoji);
+    localStorage.setItem(CUSTOM_EMOJI_KEY, JSON.stringify(emojis));
+  }
+}
+
 // ── State ──────────────────────────────────────────────────────────────────
 const state: AppState = {
   currentView: 'hub',
@@ -108,12 +128,23 @@ function renderEmojiField(prefix: string, value: string): string {
 }
 
 function buildEmojiDialog(currentValue: string, targetId: string): string {
-  const items = EMOJI_PICKS.map(
+  const customEmojis = getCustomEmojis();
+  const customItems = customEmojis.map(
     (em) =>
       `<button type="button" class="dialog-emoji-btn ${currentValue === em ? 'dialog-emoji-btn--selected' : ''}"
          data-action="select-emoji" data-emoji="${em}" data-target="${targetId}"
          aria-label="${em}">${em}</button>`,
   ).join('');
+
+  const defaultItems = EMOJI_PICKS.map(
+    (em) =>
+      `<button type="button" class="dialog-emoji-btn ${currentValue === em ? 'dialog-emoji-btn--selected' : ''}"
+         data-action="select-emoji" data-emoji="${em}" data-target="${targetId}"
+         aria-label="${em}">${em}</button>`,
+  ).join('');
+
+  const addBtn = `<button type="button" class="dialog-emoji-btn dialog-emoji-btn--add"
+    data-action="focus-custom-emoji" aria-label="Add custom emoji">+</button>`;
 
   return `
     <div class="emoji-dialog-backdrop" data-action="close-emoji-picker">
@@ -124,11 +155,11 @@ function buildEmojiDialog(currentValue: string, targetId: string): string {
             ${icon('x', '', 20)}
           </button>
         </div>
-        <div class="emoji-dialog__grid">${items}</div>
+        <div class="emoji-dialog__grid">${customItems}${defaultItems}${addBtn}</div>
         <div class="emoji-dialog__custom">
-          <input class="emoji-dialog__input" type="text" placeholder="Or type / paste your own emoji…"
+          <input class="emoji-dialog__input" type="text" placeholder="Type / paste emoji to add…"
             data-target="${targetId}" maxlength="10" autocomplete="off" />
-          <button type="button" class="emoji-dialog__use-btn" data-action="use-custom-emoji" data-target="${targetId}">Use</button>
+          <button type="button" class="emoji-dialog__use-btn" data-action="use-custom-emoji" data-target="${targetId}">Add</button>
         </div>
       </div>
     </div>`;
@@ -187,7 +218,7 @@ function buildWordCardHtml(w: Word): string {
       ${emojiDisplay}
       <div class="word-card__body">
         <span class="word-card__term">${escapeHtml(w.term)}</span>
-        <p class="word-card__preview">${escapeHtml(w.definition.slice(0, 80))}${w.definition.length > 80 ? '…' : ''}</p>
+        <p class="word-card__preview">${escapeHtml((w.meaning || w.definition).slice(0, 80))}${(w.meaning || w.definition).length > 80 ? '…' : ''}</p>
         ${meta ? `<div class="word-card__meta">${meta}</div>` : ''}
       </div>
       <span class="word-card__arrow" aria-hidden="true">${icon('chevron-right', '', 18)}</span>
@@ -240,19 +271,24 @@ function buildAddView(): string {
         </button>
       </div>
       <h2 class="view-title">Add a Word</h2>
-      <form class="word-form" data-action="submit-add" novalidate>
+      <form class="word-form" novalidate>
         ${renderEmojiField('add', formEmojiValue)}
         <div class="form-group">
-          <label class="form-label" for="add-term">Word / Expression <span class="required">*</span></label>
+          <label class="form-label" for="add-term">Word / Expression</label>
           <input id="add-term" class="form-input" type="text" name="term"
-            placeholder="e.g. Epistemology" autocomplete="off" required />
+            placeholder="e.g. Epistemology" autocomplete="off" />
           <span class="form-error" id="add-term-error" aria-live="polite"></span>
         </div>
         <div class="form-group">
-          <label class="form-label" for="add-def">Description <span class="required">*</span></label>
+          <label class="form-label" for="add-meaning">Meaning</label>
+          <textarea id="add-meaning" class="form-textarea" name="meaning"
+            placeholder="What does this word mean?" rows="3"></textarea>
+          <span class="form-error" id="add-meaning-error" aria-live="polite"></span>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="add-def">General Description <span class="hint">(optional)</span></label>
           <textarea id="add-def" class="form-textarea" name="definition"
-            placeholder="Describe what this word means to you…" rows="4" required></textarea>
-          <span class="form-error" id="add-def-error" aria-live="polite"></span>
+            placeholder="Add extra context, examples, personal notes…" rows="4"></textarea>
         </div>
         ${renderSourceField('add')}
         ${renderCategoryField('add')}
@@ -261,7 +297,7 @@ function buildAddView(): string {
           <input id="add-tags" class="form-input" type="text" name="tags"
             placeholder="e.g. philosophy, knowledge" autocomplete="off" />
         </div>
-        <button type="submit" class="btn btn-primary btn-full">Save Word</button>
+        <button type="button" class="btn btn-primary btn-full" data-action="submit-add">Save Word</button>
       </form>
     </section>`;
 }
@@ -285,7 +321,16 @@ function buildDetailView(word: Word): string {
       <h2 class="detail__term">${escapeHtml(word.term)}</h2>
       ${word.category ? `<div class="detail__category">${renderCategoryBadge(word.category)}</div>` : ''}
       ${word.tags.length ? `<div class="detail__tags">${renderTagChips(word.tags)}</div>` : ''}
-      <div class="detail__definition">${escapeHtml(word.definition).replace(/\n/g, '<br>')}</div>
+      ${word.meaning ? `
+        <div class="detail__section">
+          <h3 class="detail__section-label">Meaning</h3>
+          <div class="detail__definition">${escapeHtml(word.meaning).replace(/\n/g, '<br>')}</div>
+        </div>` : ''}
+      ${word.definition ? `
+        <div class="detail__section">
+          <h3 class="detail__section-label">General Description</h3>
+          <div class="detail__definition">${escapeHtml(word.definition).replace(/\n/g, '<br>')}</div>
+        </div>` : ''}
       ${word.source ? `
         <div class="detail__source">
           ${icon('link-2', '', 14)}
@@ -318,18 +363,23 @@ function buildEditView(word: Word): string {
         </button>
       </div>
       <h2 class="view-title">Edit Word</h2>
-      <form class="word-form" data-action="submit-edit" data-id="${escapeHtml(word.id)}" novalidate>
+      <form class="word-form" novalidate>
         ${renderEmojiField('edit', formEmojiValue)}
         <div class="form-group">
-          <label class="form-label" for="edit-term">Word / Expression <span class="required">*</span></label>
-          <input id="edit-term" class="form-input" type="text" name="term"
-            value="${escapeHtml(word.term)}" required />
-          <span class="form-error" id="edit-term-error" aria-live="polite"></span>
+          <label class="form-label">Word / Expression</label>
+          <input id="edit-term" type="hidden" name="term" value="${escapeHtml(word.term)}" />
+          <div class="form-input form-input--readonly" data-action="goto-detail" data-id="${escapeHtml(word.id)}" tabindex="0">
+            ${escapeHtml(word.term)}
+          </div>
         </div>
         <div class="form-group">
-          <label class="form-label" for="edit-def">Description <span class="required">*</span></label>
-          <textarea id="edit-def" class="form-textarea" name="definition" rows="4" required>${escapeHtml(word.definition)}</textarea>
-          <span class="form-error" id="edit-def-error" aria-live="polite"></span>
+          <label class="form-label" for="edit-meaning">Meaning</label>
+          <textarea id="edit-meaning" class="form-textarea" name="meaning" rows="3">${escapeHtml(word.meaning)}</textarea>
+          <span class="form-error" id="edit-meaning-error" aria-live="polite"></span>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="edit-def">General Description <span class="hint">(optional)</span></label>
+          <textarea id="edit-def" class="form-textarea" name="definition" rows="4">${escapeHtml(word.definition)}</textarea>
         </div>
         ${renderSourceField('edit', word.source)}
         ${renderCategoryField('edit', word.category)}
@@ -338,7 +388,7 @@ function buildEditView(word: Word): string {
           <input id="edit-tags" class="form-input" type="text" name="tags"
             value="${escapeHtml(word.tags.join(', '))}" />
         </div>
-        <button type="submit" class="btn btn-primary btn-full">Update Word</button>
+        <button type="button" class="btn btn-primary btn-full" data-action="submit-edit" data-id="${escapeHtml(word.id)}">Update Word</button>
       </form>
     </section>`;
 }
@@ -376,16 +426,6 @@ export function render(): void {
 
   app.innerHTML = `
     <div class="shell">
-      <header class="app-header">
-        <div class="app-header__logo" aria-hidden="true">
-          <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
-            <rect width="28" height="28" rx="8" fill="var(--accent)"/>
-            <text x="14" y="19.5" text-anchor="middle" font-size="14" font-family="Georgia, serif"
-              fill="#fff" font-weight="bold">P</text>
-          </svg>
-        </div>
-        <span class="app-header__title">PonderHub</span>
-      </header>
       <main class="main-content" id="main-content" role="main">
         ${mainContent}
       </main>
@@ -519,12 +559,14 @@ function handleAction(e: MouseEvent): void {
     // select-emoji and close-emoji-picker handled by handleDialogAction (dialog is outside #app)
     case 'submit-add': {
       e.preventDefault();
-      submitAddForm(target as HTMLFormElement);
+      const form = target.closest('form') ?? document.querySelector('.word-form');
+      if (form) submitAddForm(form as HTMLFormElement);
       break;
     }
     case 'submit-edit': {
       e.preventDefault();
-      submitEditForm(target as HTMLFormElement, id!);
+      const form = target.closest('form') ?? document.querySelector('.word-form');
+      if (form && id) submitEditForm(form as HTMLFormElement, id);
       break;
     }
   }
@@ -550,8 +592,15 @@ function handleDialogAction(e: MouseEvent): void {
     const targetInputId = target.dataset.target;
     const customInput = backdrop.querySelector<HTMLInputElement>('.emoji-dialog__input');
     if (targetInputId && customInput && customInput.value.trim()) {
-      applyEmojiSelection(customInput.value.trim(), targetInputId);
+      const emoji = customInput.value.trim();
+      addCustomEmoji(emoji);
+      applyEmojiSelection(emoji, targetInputId);
       closeEmojiDialog();
+    }
+  } else if (action === 'focus-custom-emoji') {
+    const customInput = backdrop.querySelector<HTMLInputElement>('.emoji-dialog__input');
+    if (customInput) {
+      customInput.focus();
     }
   } else if (action === 'close-emoji-picker') {
     closeEmojiDialog();
@@ -582,6 +631,7 @@ function closeEmojiDialog(): void {
 
 function submitAddForm(form: HTMLFormElement): void {
   const termInput = form.querySelector<HTMLInputElement>('#add-term')!;
+  const meaningInput = form.querySelector<HTMLTextAreaElement>('#add-meaning')!;
   const defInput = form.querySelector<HTMLTextAreaElement>('#add-def')!;
   const categoryInput = form.querySelector<HTMLInputElement>('#add-category')!;
   const emojiInput = form.querySelector<HTMLInputElement>('#add-emoji')!;
@@ -595,16 +645,17 @@ function submitAddForm(form: HTMLFormElement): void {
   } else {
     clearError('add-term-error');
   }
-  if (!defInput.value.trim()) {
-    showError('add-def-error', 'Please enter a description.');
+  if (!meaningInput.value.trim()) {
+    showError('add-meaning-error', 'Please enter a meaning.');
     valid = false;
   } else {
-    clearError('add-def-error');
+    clearError('add-meaning-error');
   }
   if (!valid) return;
 
   addWord(
     termInput.value,
+    meaningInput.value,
     defInput.value,
     categoryInput.value,
     emojiInput.value,
@@ -616,6 +667,7 @@ function submitAddForm(form: HTMLFormElement): void {
 
 function submitEditForm(form: HTMLFormElement, wordId: string): void {
   const termInput = form.querySelector<HTMLInputElement>('#edit-term')!;
+  const meaningInput = form.querySelector<HTMLTextAreaElement>('#edit-meaning')!;
   const defInput = form.querySelector<HTMLTextAreaElement>('#edit-def')!;
   const categoryInput = form.querySelector<HTMLInputElement>('#edit-category')!;
   const emojiInput = form.querySelector<HTMLInputElement>('#edit-emoji')!;
@@ -623,23 +675,18 @@ function submitEditForm(form: HTMLFormElement, wordId: string): void {
   const sourceInput = form.querySelector<HTMLInputElement>('#edit-source')!;
 
   let valid = true;
-  if (!termInput.value.trim()) {
-    showError('edit-term-error', 'Please enter a word or expression.');
+  if (!meaningInput.value.trim()) {
+    showError('edit-meaning-error', 'Please enter a meaning.');
     valid = false;
   } else {
-    clearError('edit-term-error');
-  }
-  if (!defInput.value.trim()) {
-    showError('edit-def-error', 'Please enter a description.');
-    valid = false;
-  } else {
-    clearError('edit-def-error');
+    clearError('edit-meaning-error');
   }
   if (!valid) return;
 
   updateWord(
     wordId,
     termInput.value,
+    meaningInput.value,
     defInput.value,
     categoryInput.value,
     emojiInput.value,

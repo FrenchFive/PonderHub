@@ -12,6 +12,7 @@ export function getAllWords(): Word[] {
     if (!raw) return [];
     // Back-compat: fill in category/emoji/source for entries saved before these fields existed
     return (JSON.parse(raw) as Partial<Word>[]).map((w) => ({
+      meaning: '',
       category: '',
       emoji: '',
       source: '',
@@ -36,6 +37,7 @@ export function getCategories(): string[] {
 
 export function addWord(
   term: string,
+  meaning: string,
   definition: string,
   category: string,
   emoji: string,
@@ -47,6 +49,7 @@ export function addWord(
   const word: Word = {
     id: generateId(),
     term: term.trim(),
+    meaning: meaning.trim(),
     definition: definition.trim(),
     category: category.trim(),
     emoji: emoji.trim(),
@@ -63,6 +66,7 @@ export function addWord(
 export function updateWord(
   id: string,
   term: string,
+  meaning: string,
   definition: string,
   category: string,
   emoji: string,
@@ -75,6 +79,7 @@ export function updateWord(
   words[idx] = {
     ...words[idx],
     term: term.trim(),
+    meaning: meaning.trim(),
     definition: definition.trim(),
     category: category.trim(),
     emoji: emoji.trim(),
@@ -101,6 +106,7 @@ export function searchWords(query: string): Word[] {
   return getAllWords().filter(
     (w) =>
       w.term.toLowerCase().includes(q) ||
+      w.meaning.toLowerCase().includes(q) ||
       w.definition.toLowerCase().includes(q) ||
       w.category.toLowerCase().includes(q) ||
       w.tags.some((t) => t.toLowerCase().includes(q)) ||
