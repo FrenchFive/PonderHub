@@ -10,26 +10,21 @@ import {
 } from './storage';
 import { createIcons,
   ArrowLeft, Plus, Search, Pencil, Trash2, ChevronRight, BookOpen,
-  FileText, Calendar, Link2, Clock,
-  Brain, Lightbulb, Key, Globe, Target, Sparkles, Microscope, Palette, Music,
-  Sprout, Zap, Flame, Gem, Waves, Feather, Trophy, Star, Heart,
-  Map, PenTool, Eye, FlaskConical, Headphones, Moon, Sun, Snowflake, Leaf, Bird,
+  FileText, Calendar, Link2, Clock, X,
 } from 'lucide';
 
-// ── Icon registry for createIcons ──────────────────────────────────────────
+// ── Icon registry for createIcons (UI only) ──────────────────────────────
 const ICON_REGISTRY = {
   ArrowLeft, Plus, Search, Pencil, Trash2, ChevronRight, BookOpen,
-  FileText, Calendar, Link2, Clock,
-  Brain, Lightbulb, Key, Globe, Target, Sparkles, Microscope, Palette, Music,
-  Sprout, Zap, Flame, Gem, Waves, Feather, Trophy, Star, Heart,
-  Map, PenTool, Eye, FlaskConical, Headphones, Moon, Sun, Snowflake, Leaf, Bird,
+  FileText, Calendar, Link2, Clock, X,
 };
 
-// ── Curated icon picks for word icon selector ──────────────────────────────
-const ICON_PICKS = [
-  'book-open', 'brain', 'lightbulb', 'key', 'globe', 'target', 'sparkles', 'microscope', 'palette', 'music',
-  'sprout', 'zap', 'flame', 'gem', 'waves', 'feather', 'trophy', 'star', 'heart',
-  'map', 'pen-tool', 'eye', 'flask-conical', 'headphones', 'moon', 'sun', 'snowflake', 'leaf', 'bird',
+// ── Curated emoji picks for word personalisation ─────────────────────────
+const EMOJI_PICKS = [
+  '📖','🧠','💡','🔑','🌍','🎯','✨','🔬','🎨','🎭',
+  '🌱','⚡','🔥','💎','🌊','🦋','🏆','🧩','🌀','💫',
+  '🗺️','📝','🔭','⚗️','🎵','🌙','☀️','❄️','🌿','🦉',
+  '💬','🫀','🪐','🧬','📐','🎲','🔮','🍀','🕊️','🧿',
 ];
 
 // ── State ──────────────────────────────────────────────────────────────────
@@ -39,18 +34,18 @@ const state: AppState = {
   searchQuery: '',
 };
 
-/** The icon currently chosen in the add/edit form (kept outside DOM for dialog sync) */
-let formIconValue = '';
+/** The emoji currently chosen in the add/edit form */
+let formEmojiValue = '';
 
-function randomIcon(): string {
-  return ICON_PICKS[Math.floor(Math.random() * ICON_PICKS.length)];
+function randomEmoji(): string {
+  return EMOJI_PICKS[Math.floor(Math.random() * EMOJI_PICKS.length)];
 }
 
 function navigate(view: AppState['currentView'], wordId?: string): void {
   state.currentView = view;
   state.selectedWordId = wordId ?? null;
   if (view === 'hub') state.searchQuery = '';
-  if (view === 'add') formIconValue = '';  // will be assigned a random icon in buildAddView
+  if (view === 'add') formEmojiValue = '';  // will be assigned a random emoji in buildAddView
   render();
 }
 
@@ -98,66 +93,64 @@ function icon(name: string, cls = '', size = 20): string {
   return `<i data-lucide="${name}" class="${cls}" style="width:${size}px;height:${size}px"></i>`;
 }
 
-/** Check if a string is a known lucide icon name */
-function isLucideIcon(name: string): boolean {
-  return ICON_PICKS.includes(name);
-}
-
-function renderIconField(prefix: string, value: string): string {
-  const displayIcon = isLucideIcon(value) ? value : 'file-text';
+function renderEmojiField(prefix: string, value: string): string {
+  const display = value || '📄';
   return `
     <div class="form-group">
-      <label class="form-label">Icon</label>
-      <input id="${prefix}-icon" type="hidden" name="icon" value="${escapeHtml(value)}" />
-      <button type="button" class="icon-trigger" data-action="open-icon-picker" data-target="${prefix}-icon" aria-label="Choose icon">
-        <span class="icon-trigger__preview">${icon(displayIcon, '', 28)}</span>
-        <span class="icon-trigger__label">Tap to change</span>
-        ${icon('chevron-right', 'icon-trigger__arrow', 16)}
+      <label class="form-label">Emoji</label>
+      <input id="${prefix}-emoji" type="hidden" name="emoji" value="${escapeHtml(value)}" />
+      <button type="button" class="emoji-trigger" data-action="open-emoji-picker" data-target="${prefix}-emoji" aria-label="Choose emoji">
+        <span class="emoji-trigger__preview">${display}</span>
+        <span class="emoji-trigger__label">Tap to change</span>
+        ${icon('chevron-right', 'emoji-trigger__arrow', 16)}
       </button>
     </div>`;
 }
 
-function buildIconDialog(currentValue: string, targetId: string): string {
-  const items = ICON_PICKS.map(
-    (name) =>
-      `<button type="button" class="dialog-icon-btn ${currentValue === name ? 'dialog-icon-btn--selected' : ''}"
-         data-action="select-icon" data-icon="${name}" data-target="${targetId}"
-         aria-label="${name}">
-        ${icon(name, '', 26)}
-        <span class="dialog-icon-btn__name">${name.replace(/-/g, ' ')}</span>
-      </button>`,
+function buildEmojiDialog(currentValue: string, targetId: string): string {
+  const items = EMOJI_PICKS.map(
+    (em) =>
+      `<button type="button" class="dialog-emoji-btn ${currentValue === em ? 'dialog-emoji-btn--selected' : ''}"
+         data-action="select-emoji" data-emoji="${em}" data-target="${targetId}"
+         aria-label="${em}">${em}</button>`,
   ).join('');
 
   return `
-    <div class="icon-dialog-backdrop" data-action="close-icon-picker">
-      <div class="icon-dialog" role="dialog" aria-label="Choose an icon">
-        <div class="icon-dialog__header">
-          <span class="icon-dialog__title">Choose Icon</span>
-          <button type="button" class="icon-dialog__close" data-action="close-icon-picker" aria-label="Close">
-            ${icon('arrow-left', '', 20)}
+    <div class="emoji-dialog-backdrop" data-action="close-emoji-picker">
+      <div class="emoji-dialog" role="dialog" aria-label="Choose an emoji">
+        <div class="emoji-dialog__header">
+          <span class="emoji-dialog__title">Choose Emoji</span>
+          <button type="button" class="emoji-dialog__close" data-action="close-emoji-picker" aria-label="Close">
+            ${icon('x', '', 20)}
           </button>
         </div>
-        <div class="icon-dialog__grid">${items}</div>
+        <div class="emoji-dialog__grid">${items}</div>
+        <div class="emoji-dialog__custom">
+          <input class="emoji-dialog__input" type="text" placeholder="Or type / paste your own emoji…"
+            data-target="${targetId}" maxlength="10" autocomplete="off" />
+          <button type="button" class="emoji-dialog__use-btn" data-action="use-custom-emoji" data-target="${targetId}">Use</button>
+        </div>
       </div>
     </div>`;
 }
 
 function renderCategoryField(prefix: string, value = ''): string {
   const cats = getCategories();
-  const options = cats
-    .map((c) => `<option value="${escapeHtml(c)}"></option>`)
-    .join('');
+  const chips = cats.map(
+    (c) =>
+      `<button type="button" class="category-chip ${value === c ? 'category-chip--selected' : ''}"
+         data-action="pick-category" data-category="${escapeHtml(c)}" data-target="${prefix}-category">${escapeHtml(c)}</button>`,
+  ).join('');
   return `
     <div class="form-group">
       <label class="form-label" for="${prefix}-category">
         Category <span class="hint">(optional)</span>
       </label>
+      ${cats.length ? `<div class="category-chips">${chips}</div>` : ''}
       <input id="${prefix}-category" class="form-input" type="text" name="category"
-        list="${prefix}-category-list"
-        placeholder="e.g. Philosophy"
+        placeholder="Type a new category or tap above…"
         value="${escapeHtml(value)}"
         autocomplete="off" />
-      <datalist id="${prefix}-category-list">${options}</datalist>
     </div>`;
 }
 
@@ -177,9 +170,9 @@ function renderSourceField(prefix: string, value = ''): string {
 // ── View builders ──────────────────────────────────────────────────────────
 
 function buildWordCardHtml(w: Word): string {
-  const iconEl = isLucideIcon(w.emoji)
-    ? `<div class="word-card__icon" aria-hidden="true">${icon(w.emoji, '', 22)}</div>`
-    : `<div class="word-card__icon word-card__icon--placeholder" aria-hidden="true">${icon('file-text', '', 22)}</div>`;
+  const emojiDisplay = w.emoji
+    ? `<div class="word-card__emoji" aria-hidden="true">${w.emoji}</div>`
+    : `<div class="word-card__emoji word-card__emoji--placeholder" aria-hidden="true">📄</div>`;
 
   const meta = [
     w.category ? renderCategoryBadge(w.category) : '',
@@ -191,7 +184,7 @@ function buildWordCardHtml(w: Word): string {
   return `
     <li class="word-card" data-action="goto-detail" data-id="${escapeHtml(w.id)}"
         tabindex="0" role="button" aria-label="View definition of ${escapeHtml(w.term)}">
-      ${iconEl}
+      ${emojiDisplay}
       <div class="word-card__body">
         <span class="word-card__term">${escapeHtml(w.term)}</span>
         <p class="word-card__preview">${escapeHtml(w.definition.slice(0, 80))}${w.definition.length > 80 ? '…' : ''}</p>
@@ -237,8 +230,8 @@ function buildHubView(): string {
 }
 
 function buildAddView(): string {
-  // Assign a random icon for new words
-  if (!formIconValue) formIconValue = randomIcon();
+  // Assign a random emoji for new words
+  if (!formEmojiValue) formEmojiValue = randomEmoji();
   return `
     <section class="view" id="view-add">
       <div class="view-header">
@@ -248,7 +241,7 @@ function buildAddView(): string {
       </div>
       <h2 class="view-title">Add a Word</h2>
       <form class="word-form" data-action="submit-add" novalidate>
-        ${renderIconField('add', formIconValue)}
+        ${renderEmojiField('add', formEmojiValue)}
         <div class="form-group">
           <label class="form-label" for="add-term">Word / Expression <span class="required">*</span></label>
           <input id="add-term" class="form-input" type="text" name="term"
@@ -274,8 +267,8 @@ function buildAddView(): string {
 }
 
 function buildDetailView(word: Word): string {
-  const iconDisplay = isLucideIcon(word.emoji)
-    ? `<div class="detail__icon">${icon(word.emoji, '', 40)}</div>`
+  const emojiDisplay = word.emoji
+    ? `<div class="detail__emoji">${word.emoji}</div>`
     : '';
 
   return `
@@ -288,7 +281,7 @@ function buildDetailView(word: Word): string {
           ${icon('pencil', '', 18)}
         </button>
       </div>
-      ${iconDisplay}
+      ${emojiDisplay}
       <h2 class="detail__term">${escapeHtml(word.term)}</h2>
       ${word.category ? `<div class="detail__category">${renderCategoryBadge(word.category)}</div>` : ''}
       ${word.tags.length ? `<div class="detail__tags">${renderTagChips(word.tags)}</div>` : ''}
@@ -316,7 +309,7 @@ function buildDetailView(word: Word): string {
 }
 
 function buildEditView(word: Word): string {
-  formIconValue = isLucideIcon(word.emoji) ? word.emoji : randomIcon();
+  formEmojiValue = word.emoji || randomEmoji();
   return `
     <section class="view" id="view-edit">
       <div class="view-header">
@@ -326,7 +319,7 @@ function buildEditView(word: Word): string {
       </div>
       <h2 class="view-title">Edit Word</h2>
       <form class="word-form" data-action="submit-edit" data-id="${escapeHtml(word.id)}" novalidate>
-        ${renderIconField('edit', formIconValue)}
+        ${renderEmojiField('edit', formEmojiValue)}
         <div class="form-group">
           <label class="form-label" for="edit-term">Word / Expression <span class="required">*</span></label>
           <input id="edit-term" class="form-input" type="text" name="term"
@@ -485,25 +478,45 @@ function handleAction(e: MouseEvent): void {
         navigate('hub');
       }
       break;
-    case 'open-icon-picker': {
+    case 'open-emoji-picker': {
       const targetInputId = target.dataset.target;
       if (targetInputId) {
         const input = document.getElementById(targetInputId) as HTMLInputElement | null;
         const currentVal = input?.value ?? '';
         // Inject dialog into DOM
-        const existing = document.querySelector('.icon-dialog-backdrop');
+        const existing = document.querySelector('.emoji-dialog-backdrop');
         if (existing) existing.remove();
-        const dialogHtml = buildIconDialog(currentVal, targetInputId);
+        const dialogHtml = buildEmojiDialog(currentVal, targetInputId);
         document.body.insertAdjacentHTML('beforeend', dialogHtml);
         createIcons({ icons: ICON_REGISTRY });
         // Animate in
         requestAnimationFrame(() => {
-          document.querySelector('.icon-dialog-backdrop')?.classList.add('icon-dialog-backdrop--open');
+          document.querySelector('.emoji-dialog-backdrop')?.classList.add('emoji-dialog-backdrop--open');
         });
       }
       break;
     }
-    // select-icon and close-icon-picker handled by handleDialogAction (dialog is outside #app)
+    case 'pick-category': {
+      const cat = target.dataset.category ?? '';
+      const targetInputId = target.dataset.target;
+      if (targetInputId) {
+        const input = document.getElementById(targetInputId) as HTMLInputElement | null;
+        if (input) {
+          // Toggle: if already selected, clear it
+          if (input.value === cat) {
+            input.value = '';
+          } else {
+            input.value = cat;
+          }
+          // Update chip selection visuals
+          document.querySelectorAll<HTMLButtonElement>('.category-chip').forEach((c) => {
+            c.classList.toggle('category-chip--selected', c.dataset.category === input.value);
+          });
+        }
+      }
+      break;
+    }
+    // select-emoji and close-emoji-picker handled by handleDialogAction (dialog is outside #app)
     case 'submit-add': {
       e.preventDefault();
       submitAddForm(target as HTMLFormElement);
@@ -519,40 +532,48 @@ function handleAction(e: MouseEvent): void {
 
 function handleDialogAction(e: MouseEvent): void {
   const el = e.target as HTMLElement;
-  // Only handle clicks inside the dialog backdrop
-  const backdrop = el.closest('.icon-dialog-backdrop');
+  const backdrop = el.closest('.emoji-dialog-backdrop');
   if (!backdrop) return;
 
   const target = el.closest('[data-action]') as HTMLElement | null;
   if (!target) return;
 
   const action = target.dataset.action;
-  if (action === 'select-icon') {
-    const iconName = target.dataset.icon;
+  if (action === 'select-emoji') {
+    const emoji = target.dataset.emoji;
     const targetInputId = target.dataset.target;
-    if (iconName && targetInputId) {
-      const input = document.getElementById(targetInputId) as HTMLInputElement | null;
-      if (input) {
-        input.value = iconName;
-        formIconValue = iconName;
-        // Update the trigger preview
-        const trigger = document.querySelector('.icon-trigger__preview');
-        if (trigger) {
-          trigger.innerHTML = icon(iconName, '', 28);
-          createIcons({ icons: ICON_REGISTRY });
-        }
-      }
+    if (emoji && targetInputId) {
+      applyEmojiSelection(emoji, targetInputId);
     }
-    closeIconDialog();
-  } else if (action === 'close-icon-picker') {
-    closeIconDialog();
+    closeEmojiDialog();
+  } else if (action === 'use-custom-emoji') {
+    const targetInputId = target.dataset.target;
+    const customInput = backdrop.querySelector<HTMLInputElement>('.emoji-dialog__input');
+    if (targetInputId && customInput && customInput.value.trim()) {
+      applyEmojiSelection(customInput.value.trim(), targetInputId);
+      closeEmojiDialog();
+    }
+  } else if (action === 'close-emoji-picker') {
+    closeEmojiDialog();
   }
 }
 
-function closeIconDialog(): void {
-  const backdrop = document.querySelector('.icon-dialog-backdrop');
+function applyEmojiSelection(emoji: string, targetInputId: string): void {
+  const input = document.getElementById(targetInputId) as HTMLInputElement | null;
+  if (input) {
+    input.value = emoji;
+    formEmojiValue = emoji;
+    const trigger = document.querySelector('.emoji-trigger__preview');
+    if (trigger) {
+      trigger.textContent = emoji;
+    }
+  }
+}
+
+function closeEmojiDialog(): void {
+  const backdrop = document.querySelector('.emoji-dialog-backdrop');
   if (backdrop) {
-    backdrop.classList.remove('icon-dialog-backdrop--open');
+    backdrop.classList.remove('emoji-dialog-backdrop--open');
     setTimeout(() => backdrop.remove(), 200);
   }
 }
@@ -563,7 +584,7 @@ function submitAddForm(form: HTMLFormElement): void {
   const termInput = form.querySelector<HTMLInputElement>('#add-term')!;
   const defInput = form.querySelector<HTMLTextAreaElement>('#add-def')!;
   const categoryInput = form.querySelector<HTMLInputElement>('#add-category')!;
-  const iconInput = form.querySelector<HTMLInputElement>('#add-icon')!;
+  const emojiInput = form.querySelector<HTMLInputElement>('#add-emoji')!;
   const tagsInput = form.querySelector<HTMLInputElement>('#add-tags')!;
   const sourceInput = form.querySelector<HTMLInputElement>('#add-source')!;
 
@@ -586,7 +607,7 @@ function submitAddForm(form: HTMLFormElement): void {
     termInput.value,
     defInput.value,
     categoryInput.value,
-    iconInput.value,
+    emojiInput.value,
     parseTags(tagsInput.value),
     sourceInput.value,
   );
@@ -597,7 +618,7 @@ function submitEditForm(form: HTMLFormElement, wordId: string): void {
   const termInput = form.querySelector<HTMLInputElement>('#edit-term')!;
   const defInput = form.querySelector<HTMLTextAreaElement>('#edit-def')!;
   const categoryInput = form.querySelector<HTMLInputElement>('#edit-category')!;
-  const iconInput = form.querySelector<HTMLInputElement>('#edit-icon')!;
+  const emojiInput = form.querySelector<HTMLInputElement>('#edit-emoji')!;
   const tagsInput = form.querySelector<HTMLInputElement>('#edit-tags')!;
   const sourceInput = form.querySelector<HTMLInputElement>('#edit-source')!;
 
@@ -621,7 +642,7 @@ function submitEditForm(form: HTMLFormElement, wordId: string): void {
     termInput.value,
     defInput.value,
     categoryInput.value,
-    iconInput.value,
+    emojiInput.value,
     parseTags(tagsInput.value),
     sourceInput.value,
   );

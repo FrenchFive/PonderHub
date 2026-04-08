@@ -240,23 +240,6 @@ html, body {
   box-shadow: var(--neu-inset);
 }
 
-.word-card__icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 40px;
-  height: 40px;
-  border-radius: 12px;
-  background: var(--accent-soft);
-  color: var(--accent);
-  flex-shrink: 0;
-}
-
-.word-card__icon--placeholder {
-  background: var(--border);
-  color: var(--text-secondary);
-  opacity: .5;
-}
 
 .word-card__body {
   flex: 1;
@@ -505,8 +488,8 @@ html, body {
   display: none;
 }
 
-/* ── Icon trigger (tappable preview in form) ───────────────────────────── */
-.icon-trigger {
+/* ── Emoji trigger (tappable preview in form) ──────────────────────────── */
+.emoji-trigger {
   display: flex;
   align-items: center;
   gap: 12px;
@@ -523,12 +506,12 @@ html, body {
   text-align: left;
 }
 
-.icon-trigger:active {
+.emoji-trigger:active {
   transform: scale(.98);
   box-shadow: var(--neu-inset);
 }
 
-.icon-trigger__preview {
+.emoji-trigger__preview {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -536,24 +519,24 @@ html, body {
   height: 48px;
   border-radius: 14px;
   background: var(--accent-soft);
-  color: var(--accent);
+  font-size: 1.6rem;
   flex-shrink: 0;
 }
 
-.icon-trigger__label {
+.emoji-trigger__label {
   flex: 1;
   font-size: .9rem;
   color: var(--text-secondary);
   font-weight: 500;
 }
 
-.icon-trigger__arrow {
+.emoji-trigger__arrow {
   color: var(--text-secondary);
   opacity: .4;
 }
 
-/* ── Icon dialog (modal overlay) ───────────────────────────────────────── */
-.icon-dialog-backdrop {
+/* ── Emoji dialog (modal overlay) ──────────────────────────────────────── */
+.emoji-dialog-backdrop {
   position: fixed;
   inset: 0;
   z-index: 100;
@@ -567,11 +550,11 @@ html, body {
   backdrop-filter: blur(4px);
 }
 
-.icon-dialog-backdrop--open {
+.emoji-dialog-backdrop--open {
   opacity: 1;
 }
 
-.icon-dialog {
+.emoji-dialog {
   width: 100%;
   max-width: 540px;
   max-height: 70vh;
@@ -584,11 +567,11 @@ html, body {
   transition: transform .2s;
 }
 
-.icon-dialog-backdrop--open .icon-dialog {
+.emoji-dialog-backdrop--open .emoji-dialog {
   transform: translateY(0);
 }
 
-.icon-dialog__header {
+.emoji-dialog__header {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -596,13 +579,13 @@ html, body {
   flex-shrink: 0;
 }
 
-.icon-dialog__title {
+.emoji-dialog__title {
   font-size: 1.1rem;
   font-weight: 700;
   letter-spacing: -.3px;
 }
 
-.icon-dialog__close {
+.emoji-dialog__close {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -616,56 +599,138 @@ html, body {
   box-shadow: var(--shadow-sm);
 }
 
-.icon-dialog__grid {
+.emoji-dialog__grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 8px;
-  padding: 8px 16px 32px;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 6px;
+  padding: 8px 16px 12px;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
-  padding-bottom: calc(32px + var(--safe-bottom));
 }
 
-.dialog-icon-btn {
+.dialog-emoji-btn {
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 4px;
-  padding: 12px 4px;
+  padding: 10px;
+  font-size: 1.6rem;
   border-radius: var(--radius-sm);
   border: 2px solid transparent;
   background: var(--surface);
-  color: var(--text-secondary);
   cursor: pointer;
   box-shadow: var(--neu-raised);
   transition: all .12s;
-  font-family: var(--font);
 }
 
-.dialog-icon-btn:active {
-  transform: scale(.95);
+.dialog-emoji-btn:active {
+  transform: scale(.9);
   box-shadow: var(--neu-inset);
 }
 
-.dialog-icon-btn__name {
-  font-size: .62rem;
-  text-transform: capitalize;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 100%;
-  font-weight: 500;
+.dialog-emoji-btn--selected {
+  border-color: var(--accent);
+  background: var(--accent-soft);
 }
 
-.dialog-icon-btn--selected {
+.emoji-dialog__custom {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  padding-bottom: calc(16px + var(--safe-bottom));
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.emoji-dialog__input {
+  flex: 1;
+  border: none;
+  border-radius: var(--radius-xs);
+  padding: 10px 12px;
+  font-size: .95rem;
+  font-family: var(--font);
+  background: var(--surface);
+  color: var(--text);
+  outline: none;
+  box-shadow: var(--neu-inset);
+}
+
+.emoji-dialog__input::placeholder {
+  color: var(--text-secondary);
+  font-size: .85rem;
+}
+
+.emoji-dialog__use-btn {
+  padding: 10px 16px;
+  border: none;
+  border-radius: var(--radius-xs);
+  background: var(--accent);
+  color: #fff;
+  font-size: .88rem;
+  font-weight: 600;
+  font-family: var(--font);
+  cursor: pointer;
+  flex-shrink: 0;
+  box-shadow: var(--shadow-sm);
+}
+
+.emoji-dialog__use-btn:active {
+  transform: scale(.95);
+}
+
+/* ── Category chips (tappable existing categories) ─────────────────────── */
+.category-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.category-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 14px;
+  border-radius: 100px;
+  border: 1.5px solid var(--border);
+  background: var(--surface);
+  font-size: .82rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-family: var(--font);
+  transition: all .12s;
+  box-shadow: var(--shadow-sm);
+}
+
+.category-chip:active {
+  transform: scale(.95);
+}
+
+.category-chip--selected {
   border-color: var(--accent);
   background: var(--accent-soft);
   color: var(--accent);
 }
 
+/* ── Word card emoji ───────────────────────────────────────────────────── */
+.word-card__emoji {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: var(--accent-soft);
+  font-size: 1.3rem;
+  flex-shrink: 0;
+}
+
+.word-card__emoji--placeholder {
+  opacity: .35;
+}
+
 /* ── Detail view ───────────────────────────────────────────────────────── */
-.detail__icon {
+.detail__emoji {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -673,7 +738,7 @@ html, body {
   height: 64px;
   border-radius: 18px;
   background: var(--accent-soft);
-  color: var(--accent);
+  font-size: 2.2rem;
   margin-bottom: 16px;
   box-shadow: var(--neu-raised);
 }
