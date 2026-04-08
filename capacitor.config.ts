@@ -4,7 +4,9 @@ const config: CapacitorConfig = {
   appId: 'com.frenchfive.ponderhub',
   appName: 'PonderHub',
   webDir: 'dist',
-  bundledWebRuntime: false,
+  server: {
+    androidScheme: 'https',
+  },
   plugins: {
     SplashScreen: {
       launchShowDuration: 0,
