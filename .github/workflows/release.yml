@@ -1,0 +1,182 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # ── Determine version bump from lines changed since last tag ──
+      - name: Determine version bump
+        id: version
+        run: |
+          set -e
+
+          # Get the latest version tag, default to 0.0.0
+          LATEST_TAG=$(git tag --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -n1)
+          if [ -z "$LATEST_TAG" ]; then
+            LATEST_TAG="v0.0.0"
+          fi
+
+          echo "Latest tag: $LATEST_TAG"
+
+          # Parse current version
+          VERSION="${LATEST_TAG#v}"
+          MAJOR=$(echo "$VERSION" | cut -d. -f1)
+          MINOR=$(echo "$VERSION" | cut -d. -f2)
+          PATCH=$(echo "$VERSION" | cut -d. -f3)
+
+          # Count lines changed (added + deleted) since last tag
+          if [ "$LATEST_TAG" = "v0.0.0" ]; then
+            LINES_CHANGED=$(git diff --stat "$(git rev-list --max-parents=0 HEAD)" HEAD | tail -1 | grep -oE '[0-9]+ insertions?' | grep -oE '[0-9]+' || echo 0)
+            LINES_DELETED=$(git diff --stat "$(git rev-list --max-parents=0 HEAD)" HEAD | tail -1 | grep -oE '[0-9]+ deletions?' | grep -oE '[0-9]+' || echo 0)
+          else
+            LINES_CHANGED=$(git diff --stat "${LATEST_TAG}..HEAD" | tail -1 | grep -oE '[0-9]+ insertions?' | grep -oE '[0-9]+' || echo 0)
+            LINES_DELETED=$(git diff --stat "${LATEST_TAG}..HEAD" | tail -1 | grep -oE '[0-9]+ deletions?' | grep -oE '[0-9]+' || echo 0)
+          fi
+
+          TOTAL_LINES=$((LINES_CHANGED + LINES_DELETED))
+          echo "Lines changed (insertions + deletions): $TOTAL_LINES"
+
+          # Determine bump type based on lines changed
+          # <50 lines  = patch (minor fix)
+          # >=50 <5000 = minor (mid changes)
+          # >=5000     = major (major update)
+          if [ "$TOTAL_LINES" -ge 5000 ]; then
+            BUMP="major"
+          elif [ "$TOTAL_LINES" -ge 50 ]; then
+            BUMP="minor"
+          else
+            BUMP="patch"
+          fi
+
+          # Apply bump
+          case "$BUMP" in
+            major) MAJOR=$((MAJOR + 1)); MINOR=0; PATCH=0 ;;
+            minor) MINOR=$((MINOR + 1)); PATCH=0 ;;
+            patch) PATCH=$((PATCH + 1)) ;;
+          esac
+
+          NEW_VERSION="${MAJOR}.${MINOR}.${PATCH}"
+          VERSION_CODE=$((MAJOR * 10000 + MINOR * 100 + PATCH))
+
+          echo "Bump type: $BUMP"
+          echo "New version: $NEW_VERSION"
+          echo "Version code: $VERSION_CODE"
+
+          echo "version=$NEW_VERSION" >> "$GITHUB_OUTPUT"
+          echo "version_code=$VERSION_CODE" >> "$GITHUB_OUTPUT"
+          echo "bump=$BUMP" >> "$GITHUB_OUTPUT"
+          echo "tag=v$NEW_VERSION" >> "$GITHUB_OUTPUT"
+
+      # ── Update version in package.json ──
+      - name: Update package.json version
+        run: npm version "${{ steps.version.outputs.version }}" --no-git-tag-version
+
+      # ── Set up build tools ──
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # ── Build web dist ──
+      - name: Build web assets
+        run: npm run build
+
+      # ── Prepare Android platform ──
+      - name: Add Android platform (first run)
+        run: |
+          if [ ! -d "android" ]; then
+            npx cap add android
+          fi
+
+      - name: Sync Capacitor
+        run: npx cap sync android
+
+      # ── Build Android APK ──
+      - name: Build release APK
+        working-directory: android
+        env:
+          VERSION_CODE: ${{ steps.version.outputs.version_code }}
+          VERSION_NAME: ${{ steps.version.outputs.version }}
+        run: ./gradlew assembleRelease --no-daemon
+
+      - name: Locate APK
+        id: apk
+        run: |
+          set -e
+          APK_PATH=$(find android/app/build/outputs/apk/release -name '*.apk' | head -n1)
+          if [ -z "$APK_PATH" ]; then
+            echo "::error::Release APK not found! Check signing configuration."
+            exit 1
+          fi
+          DEST="PonderHub-${{ steps.version.outputs.version }}.apk"
+          cp "$APK_PATH" "$DEST"
+          echo "apk_path=$DEST" >> "$GITHUB_OUTPUT"
+
+      # ── Commit version bump ──
+      - name: Commit version changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add package.json package-lock.json
+          git diff --cached --quiet && echo "No changes to commit" || \
+            git commit -m "chore: bump version to ${{ steps.version.outputs.version }}"
+          git push
+
+      # ── Generate release notes from commits ──
+      - name: Generate release notes
+        id: notes
+        run: |
+          LATEST_TAG=$(git tag --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -n1)
+          if [ -z "$LATEST_TAG" ]; then
+            NOTES=$(git log --pretty=format:"- %s" | head -50)
+          else
+            NOTES=$(git log "${LATEST_TAG}..HEAD" --pretty=format:"- %s")
+          fi
+
+          {
+            echo "## What's Changed"
+            echo ""
+            echo "$NOTES"
+            echo ""
+            echo "**Version:** ${{ steps.version.outputs.version }}"
+            echo "**Bump type:** ${{ steps.version.outputs.bump }}"
+          } > release_notes.md
+
+      # ── Create tag and GitHub Release ──
+      - name: Create tag
+        run: |
+          git tag "${{ steps.version.outputs.tag }}"
+          git push origin "${{ steps.version.outputs.tag }}"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: PonderHub ${{ steps.version.outputs.tag }}
+          body_path: release_notes.md
+          files: ${{ steps.apk.outputs.apk_path }}
+          draft: false
+          prerelease: false
