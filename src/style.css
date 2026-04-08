@@ -903,6 +903,7 @@ html, body {
   touch-action: none;
   overflow: hidden;
   padding: 24px;
+  background: #0a0a12;
 }
 
 .memo-reveal {
@@ -923,24 +924,23 @@ html, body {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, var(--accent-soft), rgba(0,122,255,.06));
+  background: rgba(255, 255, 255, .08);
   border-radius: 24px;
-  box-shadow: 0 8px 24px rgba(0,122,255,.12), var(--neu-raised);
-  border: 1.5px solid rgba(255,255,255,.3);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .3);
+  border: 1.5px solid rgba(255, 255, 255, .15);
 }
 
 .memo-reveal__term {
   font-size: 2rem;
   font-weight: 700;
-  color: var(--text);
+  color: #fff;
   letter-spacing: -.5px;
   text-align: center;
 }
 
 .memo-reveal__hint {
   font-size: .78rem;
-  color: var(--text-secondary);
-  opacity: .6;
+  color: rgba(255, 255, 255, .45);
   margin-top: 8px;
 }
 
@@ -948,23 +948,16 @@ html, body {
   width: 100%;
   max-width: 380px;
   min-height: 340px;
-  background:
-    linear-gradient(
-      135deg,
-      hsla(var(--card-hue, 220), 80%, 65%, .15) 0%,
-      hsla(calc(var(--card-hue, 220) + 60), 70%, 60%, .1) 50%,
-      hsla(calc(var(--card-hue, 220) + 120), 75%, 70%, .12) 100%
-    ),
-    rgba(255, 255, 255, .55);
-  -webkit-backdrop-filter: blur(20px) saturate(1.4);
-  backdrop-filter: blur(20px) saturate(1.4);
+  background: rgba(255, 255, 255, .12);
+  -webkit-backdrop-filter: blur(40px) saturate(1.2);
+  backdrop-filter: blur(40px) saturate(1.2);
   border-radius: 28px;
   padding: 40px 28px;
-  border: 1.5px solid rgba(255, 255, 255, .35);
+  border: 1.5px solid rgba(255, 255, 255, .18);
   box-shadow:
-    0 8px 32px hsla(var(--card-hue, 220), 60%, 50%, .12),
-    0 2px 8px rgba(0,0,0,.06),
-    inset 0 1px 1px rgba(255,255,255,.5);
+    0 8px 32px rgba(0, 0, 0, .25),
+    0 2px 8px rgba(0, 0, 0, .15),
+    inset 0 1px 1px rgba(255, 255, 255, .15);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -978,75 +971,12 @@ html, body {
   overflow: hidden;
 }
 
-@media (prefers-color-scheme: dark) {
-  .memo-card {
-    background:
-      linear-gradient(
-        135deg,
-        hsla(var(--card-hue, 220), 60%, 40%, .25) 0%,
-        hsla(calc(var(--card-hue, 220) + 60), 50%, 35%, .15) 50%,
-        hsla(calc(var(--card-hue, 220) + 120), 55%, 45%, .2) 100%
-      ),
-      rgba(44, 44, 46, .7);
-    border-color: rgba(255, 255, 255, .08);
-    box-shadow:
-      0 8px 32px hsla(var(--card-hue, 220), 40%, 20%, .3),
-      0 2px 8px rgba(0,0,0,.2),
-      inset 0 1px 1px rgba(255,255,255,.05);
-  }
-}
-
-/* ── Memo floating shapes ──────────────────────────────────────────────── */
-.memo-shape {
+/* ── Background blobs ─────────────────────────────────────────────────── */
+.memo-blob {
   position: absolute;
-  width: var(--shape-size, 30px);
-  height: var(--shape-size, 30px);
-  left: var(--shape-x, 50%);
-  top: var(--shape-y, 50%);
-  transform: rotate(var(--shape-rot, 0deg));
-  opacity: var(--shape-opacity, .1);
   pointer-events: none;
   z-index: 0;
-}
-
-.memo-shape--circle {
-  border-radius: 50%;
-  background: radial-gradient(circle,
-    hsla(var(--shape-hue, 220), 80%, 65%, .6),
-    hsla(var(--shape-hue, 220), 70%, 55%, .1)
-  );
-}
-
-.memo-shape--square {
-  border-radius: 6px;
-  background: linear-gradient(135deg,
-    hsla(var(--shape-hue, 220), 75%, 60%, .5),
-    hsla(var(--shape-hue, 220), 65%, 50%, .15)
-  );
-}
-
-.memo-shape--triangle {
-  width: 0;
-  height: 0;
-  background: none;
-  border-left: calc(var(--shape-size, 30px) / 2) solid transparent;
-  border-right: calc(var(--shape-size, 30px) / 2) solid transparent;
-  border-bottom: var(--shape-size, 30px) solid hsla(var(--shape-hue, 220), 70%, 60%, .35);
-}
-
-.memo-shape--ring {
-  border-radius: 50%;
-  background: transparent;
-  border: 3px solid hsla(var(--shape-hue, 220), 70%, 60%, .35);
-}
-
-.memo-shape--diamond {
-  background: linear-gradient(45deg,
-    hsla(var(--shape-hue, 220), 75%, 60%, .4),
-    hsla(var(--shape-hue, 220), 65%, 50%, .1)
-  );
-  border-radius: 4px;
-  transform: rotate(calc(var(--shape-rot, 0deg) + 45deg));
+  filter: blur(30px);
 }
 
 .memo-card__type {
@@ -1054,29 +984,19 @@ html, body {
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: .1em;
-  color: hsl(var(--card-hue, 220), 70%, 35%);
-  background: hsla(var(--card-hue, 220), 70%, 60%, .18);
-  -webkit-backdrop-filter: blur(8px);
-  backdrop-filter: blur(8px);
+  color: rgba(255, 255, 255, .7);
+  background: rgba(255, 255, 255, .1);
   padding: 6px 18px;
   border-radius: 100px;
-  border: 1px solid hsla(var(--card-hue, 220), 60%, 60%, .2);
+  border: 1px solid rgba(255, 255, 255, .15);
   position: relative;
   z-index: 2;
-}
-
-@media (prefers-color-scheme: dark) {
-  .memo-card__type {
-    color: hsl(var(--card-hue, 220), 70%, 75%);
-    background: hsla(var(--card-hue, 220), 50%, 40%, .3);
-    border-color: hsla(var(--card-hue, 220), 40%, 50%, .2);
-  }
 }
 
 .memo-card__text {
   font-size: 1.1rem;
   line-height: 1.8;
-  color: var(--text);
+  color: rgba(255, 255, 255, .9);
   text-align: center;
   overflow-y: auto;
   max-height: 220px;
@@ -1087,8 +1007,7 @@ html, body {
 
 .memo-card__hint {
   font-size: .78rem;
-  color: var(--text-secondary);
-  opacity: .6;
+  color: rgba(255, 255, 255, .4);
   position: relative;
   z-index: 2;
   letter-spacing: .02em;
@@ -1100,10 +1019,10 @@ html, body {
   align-items: center;
   gap: 4px;
   padding: 12px 16px 16px;
-  color: var(--text-secondary);
+  color: rgba(255, 255, 255, .45);
   font-size: .75rem;
   font-weight: 500;
-  opacity: .45;
+  background: #0a0a12;
 }
 
 .memo-up-hint svg {
