@@ -86,26 +86,53 @@ function randomEmoji(): string {
   return EMOJI_PICKS[Math.floor(Math.random() * EMOJI_PICKS.length)];
 }
 
-/** Generates random floating shapes for memo card visual variety */
-function buildMemoShapes(hue: number): string {
-  const shapeTypes = ['circle', 'square', 'triangle', 'ring', 'diamond'];
-  const count = 4 + Math.floor(Math.random() * 3); // 4-6 shapes
+/** Generates random bright background blobs for memo stage */
+function buildMemoBlobs(): string {
+  // Multi-color gradient pairs for vibrant blobs
+  const gradients = [
+    ['#ff6bd6', '#ffbd59'],           // pink → yellow
+    ['#cb5cff', '#ff6bd6'],            // purple → pink
+    ['#00e5ff', '#76ff7a'],           // cyan → green
+    ['#ff6b6b', '#ffbd59'],           // coral → amber
+    ['#536dfe', '#00e5ff'],           // indigo → cyan
+    ['#e040fb', '#7c4dff'],           // magenta → violet
+    ['#00e5ff', '#69f0ae'],           // cyan → mint
+    ['#ffab40', '#ff6e40', '#ff3d71'],// orange → red-pink
+    ['#76ff7a', '#00e5ff', '#536dfe'],// green → cyan → indigo
+    ['#ff6bd6', '#cb5cff', '#536dfe'], // pink → purple → indigo
+  ];
+
+  const count = 4 + Math.floor(Math.random() * 3); // 4-6 blobs
   let html = '';
   for (let i = 0; i < count; i++) {
-    const type = shapeTypes[Math.floor(Math.random() * shapeTypes.length)];
-    const size = 20 + Math.floor(Math.random() * 50);
-    const x = Math.floor(Math.random() * 90);
-    const y = Math.floor(Math.random() * 90);
-    const rotation = Math.floor(Math.random() * 360);
-    const opacity = 0.08 + Math.random() * 0.15;
-    const hueShift = Math.floor(Math.random() * 60) - 30;
-    html += `<span class="memo-shape memo-shape--${type}" style="
-      --shape-size: ${size}px;
-      --shape-x: ${x}%;
-      --shape-y: ${y}%;
-      --shape-rot: ${rotation}deg;
-      --shape-opacity: ${opacity};
-      --shape-hue: ${hue + hueShift};
+    const grad = gradients[Math.floor(Math.random() * gradients.length)];
+    const angle = Math.floor(Math.random() * 360);
+    const stops = grad.map((c, idx) =>
+      `${c} ${Math.round((idx / (grad.length - 1)) * 100)}%`
+    ).join(', ');
+    const background = `linear-gradient(${angle}deg, ${stops})`;
+
+    const size = 100 + Math.floor(Math.random() * 200); // 100-300px
+    const x = -15 + Math.floor(Math.random() * 110);
+    const y = -15 + Math.floor(Math.random() * 110);
+
+    // Organic shape with 8-value border-radius
+    const r = () => 30 + Math.floor(Math.random() * 45);
+    const borderRadius = `${r()}% ${r()}% ${r()}% ${r()}% / ${r()}% ${r()}% ${r()}% ${r()}%`;
+
+    // Vary aspect ratio for some blobs
+    const scaleX = 0.7 + Math.random() * 0.6;
+    const scaleY = 0.7 + Math.random() * 0.6;
+    const rotate = Math.floor(Math.random() * 360);
+
+    html += `<span class="memo-blob" style="
+      width: ${size}px;
+      height: ${size}px;
+      left: ${x}%;
+      top: ${y}%;
+      background: ${background};
+      border-radius: ${borderRadius};
+      transform: rotate(${rotate}deg) scale(${scaleX.toFixed(2)}, ${scaleY.toFixed(2)});
     " aria-hidden="true"></span>`;
   }
   return html;
@@ -534,20 +561,19 @@ function buildMemoView(): string {
   const clueLabel = memoShowField === 'meaning' ? 'Meaning' : 'Description';
   const emojiDisplay = memoWord.emoji || '📄';
 
-  // Random visual variety per card
-  const hue = Math.floor(Math.random() * 360);
-  const shapes = buildMemoShapes(hue);
+  // Random background blobs per card
+  const blobs = buildMemoBlobs();
 
   return `
     <section class="view memo-view" id="view-memo">
       <div class="memo-stage" id="memo-stage">
+        ${blobs}
         <div class="memo-reveal" id="memo-reveal">
           <span class="memo-reveal__emoji">${emojiDisplay}</span>
           <span class="memo-reveal__term">${escapeHtml(memoWord.term)}</span>
           <span class="memo-reveal__hint">↑ swipe up for next</span>
         </div>
-        <div class="memo-card" id="memo-card" style="--card-hue: ${hue}">
-          ${shapes}
+        <div class="memo-card" id="memo-card">
           <span class="memo-card__type">${clueLabel}</span>
           <p class="memo-card__text">${escapeHtml(clueText)}</p>
           <span class="memo-card__hint">← swipe to reveal word →</span>
