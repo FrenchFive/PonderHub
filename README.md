@@ -14,7 +14,7 @@ Built with **TypeScript + Vite** and packaged as a native Android APK via **Capa
 - 🔍 **Search** across terms, definitions, and tags in real time
 - ✏️ **Edit** any entry at any time
 - 🗑️ **Delete** words you no longer need
-- 💾 **100 % local** — data stored in `localStorage` (web) / native storage (Android)
+- 💾 **100% local** — data stored in `localStorage` (web) / native storage (Android)
 - 🌙 Automatic **dark mode** via `prefers-color-scheme`
 
 ---

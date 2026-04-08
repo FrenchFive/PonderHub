@@ -332,11 +332,11 @@ function attachEventListeners(): void {
         )
         .join('');
       resultsEl.innerHTML = `<ul class="word-list" role="list">${items}</ul>`;
-      attachEventListeners();
+      // No need to re-attach – click/keydown delegation is already on #app
     });
   }
 
-  // Click / keyboard delegation
+  // Click / keyboard delegation (attached once per full render)
   app.addEventListener('click', handleAction);
   app.addEventListener('keydown', (e) => {
     const key = (e as KeyboardEvent).key;
