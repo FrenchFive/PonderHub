@@ -488,6 +488,13 @@ html, body {
   display: none;
 }
 
+.form-input--readonly {
+  opacity: 0.6;
+  cursor: not-allowed;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
 /* ── Emoji trigger (tappable preview in form) ──────────────────────────── */
 .emoji-trigger {
   display: flex;
@@ -632,6 +639,15 @@ html, body {
   background: var(--accent-soft);
 }
 
+.dialog-emoji-btn--add {
+  font-size: 1.6rem;
+  color: var(--text-secondary);
+  border: 2px dashed var(--border);
+  background: transparent;
+  box-shadow: none;
+  font-weight: 300;
+}
+
 .emoji-dialog__custom {
   display: flex;
   align-items: center;
@@ -762,6 +778,19 @@ html, body {
   margin-bottom: 16px;
 }
 
+.detail__section {
+  margin-bottom: 16px;
+}
+
+.detail__section-label {
+  font-size: .78rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  margin-bottom: 8px;
+}
+
 .detail__definition {
   font-size: .95rem;
   line-height: 1.7;
@@ -769,7 +798,6 @@ html, body {
   background: var(--surface);
   border-radius: var(--radius);
   padding: 16px;
-  margin-bottom: 16px;
   white-space: pre-wrap;
   word-break: break-word;
   box-shadow: var(--neu-raised);
