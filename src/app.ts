@@ -10,13 +10,13 @@ import {
 } from './storage';
 import { createIcons,
   ArrowLeft, Plus, Search, Pencil, Trash2, ChevronRight, BookOpen,
-  FileText, Calendar, Link2, Clock, X,
+  FileText, Calendar, Link2, Clock, X, Layers, ChevronUp,
 } from 'lucide';
 
 // ── Icon registry for createIcons (UI only) ──────────────────────────────
 const ICON_REGISTRY = {
   ArrowLeft, Plus, Search, Pencil, Trash2, ChevronRight, BookOpen,
-  FileText, Calendar, Link2, Clock, X,
+  FileText, Calendar, Link2, Clock, X, Layers, ChevronUp,
 };
 
 // ── Curated emoji picks for word personalisation ─────────────────────────
@@ -57,6 +57,26 @@ const state: AppState = {
 /** The emoji currently chosen in the add/edit form */
 let formEmojiValue = '';
 
+// ── Memo state ────────────────────────────────────────────────────────────
+let memoWord: Word | null = null;
+let memoShowField: 'meaning' | 'description' = 'meaning';
+let memoRevealed = false;
+
+function pickNextMemoWord(): void {
+  const words = getAllWords();
+  if (words.length === 0) { memoWord = null; return; }
+  let next: Word;
+  if (words.length === 1) {
+    next = words[0];
+  } else {
+    do { next = words[Math.floor(Math.random() * words.length)]; }
+    while (next.id === memoWord?.id);
+  }
+  memoWord = next;
+  memoRevealed = false;
+  memoShowField = (next.definition && Math.random() >= 0.6) ? 'description' : 'meaning';
+}
+
 function randomEmoji(): string {
   return EMOJI_PICKS[Math.floor(Math.random() * EMOJI_PICKS.length)];
 }
@@ -65,7 +85,8 @@ function navigate(view: AppState['currentView'], wordId?: string): void {
   state.currentView = view;
   state.selectedWordId = wordId ?? null;
   if (view === 'hub') state.searchQuery = '';
-  if (view === 'add') formEmojiValue = '';  // will be assigned a random emoji in buildAddView
+  if (view === 'add') formEmojiValue = '';
+  if (view === 'memo' && !memoWord) pickNextMemoWord();
   render();
 }
 
@@ -393,6 +414,156 @@ function buildEditView(word: Word): string {
     </section>`;
 }
 
+function buildMemoView(): string {
+  if (!memoWord) {
+    return `
+      <section class="view memo-view" id="view-memo">
+        <div class="memo-empty">
+          <div class="memo-empty__icon">📇</div>
+          <p>No cards to review yet.</p>
+          <p>Add some words in the Hub first!</p>
+        </div>
+      </section>`;
+  }
+
+  const clueText = memoShowField === 'meaning' ? memoWord.meaning : memoWord.definition;
+  const clueLabel = memoShowField === 'meaning' ? 'Meaning' : 'Description';
+  const emojiDisplay = memoWord.emoji || '📄';
+
+  return `
+    <section class="view memo-view" id="view-memo">
+      <div class="memo-stage" id="memo-stage">
+        <div class="memo-reveal" id="memo-reveal">
+          <span class="memo-reveal__emoji">${emojiDisplay}</span>
+          <span class="memo-reveal__term">${escapeHtml(memoWord.term)}</span>
+          <span class="memo-reveal__hint">↑ swipe up for next</span>
+        </div>
+        <div class="memo-card" id="memo-card">
+          <span class="memo-card__type">${clueLabel}</span>
+          <p class="memo-card__text">${escapeHtml(clueText)}</p>
+          <span class="memo-card__hint">← swipe to reveal word →</span>
+        </div>
+      </div>
+      <div class="memo-up-hint">
+        ${icon('chevron-up', '', 18)}
+        <span>Swipe up for next card</span>
+      </div>
+    </section>`;
+}
+
+function buildBottomNav(): string {
+  const isHub = state.currentView === 'hub';
+  const isMemo = state.currentView === 'memo';
+  return `
+    <nav class="bottom-nav" aria-label="Main navigation">
+      <button class="nav-tab ${isHub ? 'nav-tab--active' : ''}" data-action="nav-hub" aria-label="Hub">
+        ${icon('book-open', '', 22)}
+        <span>Hub</span>
+      </button>
+      <button class="nav-tab ${isMemo ? 'nav-tab--active' : ''}" data-action="nav-memo" aria-label="Card Memo">
+        ${icon('layers', '', 22)}
+        <span>Memo</span>
+      </button>
+    </nav>`;
+}
+
+// ── Memo touch gestures ───────────────────────────────────────────────────
+
+function attachMemoTouchHandlers(): void {
+  const stage = document.getElementById('memo-stage');
+  if (!stage) return;
+
+  let startX = 0, startY = 0;
+  let dx = 0, dy = 0;
+  let dir: 'x' | 'y' | null = null;
+
+  stage.addEventListener('touchstart', (e) => {
+    const t = e.touches[0];
+    startX = t.clientX;
+    startY = t.clientY;
+    dx = 0; dy = 0; dir = null;
+
+    const card = document.getElementById('memo-card');
+    if (card) card.style.transition = 'none';
+    const reveal = document.getElementById('memo-reveal');
+    if (reveal && memoRevealed) reveal.style.transition = 'none';
+  }, { passive: true });
+
+  stage.addEventListener('touchmove', (e) => {
+    const t = e.touches[0];
+    dx = t.clientX - startX;
+    dy = t.clientY - startY;
+
+    if (!dir && (Math.abs(dx) > 8 || Math.abs(dy) > 8)) {
+      dir = Math.abs(dx) > Math.abs(dy) ? 'x' : 'y';
+    }
+    if (!dir) return;
+    e.preventDefault();
+
+    if (!memoRevealed && dir === 'x') {
+      const card = document.getElementById('memo-card');
+      if (card) {
+        const rot = dx * 0.06;
+        card.style.transform = `translateX(${dx}px) rotate(${rot}deg)`;
+        card.style.opacity = `${Math.max(0.2, 1 - Math.abs(dx) / 300)}`;
+      }
+    } else if (dir === 'y' && dy < 0) {
+      const el = memoRevealed
+        ? document.getElementById('memo-reveal')
+        : document.getElementById('memo-card');
+      if (el) {
+        el.style.transform = `translateY(${dy}px)`;
+        el.style.opacity = `${Math.max(0.2, 1 + dy / 250)}`;
+      }
+    }
+  }, { passive: false });
+
+  stage.addEventListener('touchend', () => {
+    const card = document.getElementById('memo-card');
+    const reveal = document.getElementById('memo-reveal');
+    const ease = 'transform .3s ease, opacity .3s ease';
+
+    if (!memoRevealed && dir === 'x' && Math.abs(dx) > 80) {
+      // Reveal word — slide card off
+      if (card) {
+        card.style.transition = ease;
+        const exitX = dx > 0 ? 400 : -400;
+        card.style.transform = `translateX(${exitX}px) rotate(${exitX * 0.06}deg)`;
+        card.style.opacity = '0';
+      }
+      memoRevealed = true;
+      if (reveal) {
+        reveal.style.transition = 'opacity .3s ease .15s';
+        reveal.style.opacity = '1';
+      }
+    } else if (dir === 'y' && dy < -80) {
+      // Next card — slide up
+      const el = memoRevealed ? reveal : card;
+      if (el) {
+        el.style.transition = ease;
+        el.style.transform = 'translateY(-500px)';
+        el.style.opacity = '0';
+      }
+      setTimeout(() => {
+        pickNextMemoWord();
+        render();
+      }, 300);
+    } else {
+      // Snap back
+      if (!memoRevealed && card) {
+        card.style.transition = ease;
+        card.style.transform = 'translateX(0) rotate(0deg)';
+        card.style.opacity = '1';
+      }
+      if (memoRevealed && reveal && dir === 'y') {
+        reveal.style.transition = ease;
+        reveal.style.transform = 'translateY(0)';
+        reveal.style.opacity = '1';
+      }
+    }
+  });
+}
+
 // ── Main render ────────────────────────────────────────────────────────────
 
 export function render(): void {
@@ -401,6 +572,8 @@ export function render(): void {
   let mainContent = '';
   if (state.currentView === 'hub') {
     mainContent = buildHubView();
+  } else if (state.currentView === 'memo') {
+    mainContent = buildMemoView();
   } else if (state.currentView === 'add') {
     mainContent = buildAddView();
   } else if (state.currentView === 'detail' && state.selectedWordId) {
@@ -424,11 +597,14 @@ export function render(): void {
     mainContent = buildHubView();
   }
 
+  const showNav = state.currentView === 'hub' || state.currentView === 'memo';
+
   app.innerHTML = `
     <div class="shell">
-      <main class="main-content" id="main-content" role="main">
+      <main class="main-content${showNav ? '' : ' main-content--full'}" id="main-content" role="main">
         ${mainContent}
       </main>
+      ${showNav ? buildBottomNav() : ''}
     </div>`;
 
   // Replace all <i data-lucide="..."> with SVGs
@@ -487,6 +663,11 @@ function attachEventListeners(): void {
     }
   });
 
+  // Memo card touch gestures
+  if (state.currentView === 'memo') {
+    attachMemoTouchHandlers();
+  }
+
   // Dialog lives outside #app — use a single global listener
   document.removeEventListener('click', handleDialogAction);
   document.addEventListener('click', handleDialogAction);
@@ -501,7 +682,11 @@ function handleAction(e: MouseEvent): void {
 
   switch (action) {
     case 'goto-hub':
+    case 'nav-hub':
       navigate('hub');
+      break;
+    case 'nav-memo':
+      navigate('memo');
       break;
     case 'goto-add':
       navigate('add');

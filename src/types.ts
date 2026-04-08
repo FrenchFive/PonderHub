@@ -11,7 +11,7 @@ export interface Word {
   updatedAt: number;
 }
 
-export type View = 'hub' | 'add' | 'detail' | 'edit';
+export type View = 'hub' | 'add' | 'detail' | 'edit' | 'memo';
 
 export interface AppState {
   currentView: View;
