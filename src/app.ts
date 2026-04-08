@@ -1,6 +1,22 @@
 import type { Word, AppState } from './types';
-import { getAllWords, addWord, updateWord, deleteWord, searchWords, getWord } from './storage';
+import {
+  getAllWords,
+  addWord,
+  updateWord,
+  deleteWord,
+  searchWords,
+  getWord,
+  getCategories,
+} from './storage';
 
+// ── Quick-pick emojis ──────────────────────────────────────────────────────
+const EMOJI_PICKS = [
+  '📖','🧠','💡','🔑','🌍','🎯','✨','🔬','🎨','🎭',
+  '🌱','⚡','🔥','💎','🌊','🦋','🏆','🧩','🌀','💫',
+  '🗺️','📝','🔭','⚗️','🎵','🌙','☀️','❄️','🌿','🦉',
+];
+
+// ── State ──────────────────────────────────────────────────────────────────
 const state: AppState = {
   currentView: 'hub',
   selectedWordId: null,
@@ -13,7 +29,7 @@ function navigate(view: AppState['currentView'], wordId?: string): void {
   render();
 }
 
-// ── helpers ────────────────────────────────────────────────────────────────
+// ── Helpers ────────────────────────────────────────────────────────────────
 
 function escapeHtml(str: string): string {
   return str
@@ -33,17 +49,82 @@ function formatDate(ts: number): string {
 }
 
 function parseTags(raw: string): string[] {
-  return raw
-    .split(',')
-    .map((t) => t.trim())
-    .filter(Boolean);
+  return raw.split(',').map((t) => t.trim()).filter(Boolean);
 }
 
 function renderTagChips(tags: string[]): string {
   return tags.map((t) => `<span class="chip">${escapeHtml(t)}</span>`).join('');
 }
 
-// ── view builders ──────────────────────────────────────────────────────────
+function renderCategoryBadge(category: string): string {
+  if (!category) return '';
+  return `<span class="category-badge">${escapeHtml(category)}</span>`;
+}
+
+function renderEmojiField(prefix: string, value = ''): string {
+  const picks = EMOJI_PICKS.map(
+    (e) =>
+      `<button type="button" class="emoji-btn" data-action="pick-emoji"
+         data-emoji="${e}" data-target="${prefix}-emoji" aria-label="${e}">${e}</button>`,
+  ).join('');
+  return `
+    <div class="form-group">
+      <label class="form-label" for="${prefix}-emoji">
+        Emoji <span class="hint">(optional)</span>
+      </label>
+      <div class="emoji-field">
+        <input id="${prefix}-emoji" class="form-input emoji-input" type="text" name="emoji"
+          placeholder="🧠" value="${escapeHtml(value)}" autocomplete="off" maxlength="10" />
+      </div>
+      <div class="emoji-picker">${picks}</div>
+    </div>`;
+}
+
+function renderCategoryField(prefix: string, value = ''): string {
+  const cats = getCategories();
+  const options = cats
+    .map((c) => `<option value="${escapeHtml(c)}"></option>`)
+    .join('');
+  return `
+    <div class="form-group">
+      <label class="form-label" for="${prefix}-category">
+        Category <span class="hint">(optional)</span>
+      </label>
+      <input id="${prefix}-category" class="form-input" type="text" name="category"
+        list="${prefix}-category-list"
+        placeholder="e.g. Philosophy"
+        value="${escapeHtml(value)}"
+        autocomplete="off" />
+      <datalist id="${prefix}-category-list">${options}</datalist>
+    </div>`;
+}
+
+// ── View builders ──────────────────────────────────────────────────────────
+
+function buildWordCardHtml(w: Word): string {
+  const emojiEl = w.emoji
+    ? `<div class="word-card__emoji" aria-hidden="true">${escapeHtml(w.emoji)}</div>`
+    : `<div class="word-card__emoji word-card__emoji--placeholder" aria-hidden="true">📄</div>`;
+
+  const meta = [
+    w.category ? renderCategoryBadge(w.category) : '',
+    ...w.tags.slice(0, 3).map((t) => `<span class="chip">${escapeHtml(t)}</span>`),
+  ]
+    .filter(Boolean)
+    .join('');
+
+  return `
+    <li class="word-card" data-action="goto-detail" data-id="${escapeHtml(w.id)}"
+        tabindex="0" role="button" aria-label="View definition of ${escapeHtml(w.term)}">
+      ${emojiEl}
+      <div class="word-card__body">
+        <span class="word-card__term">${escapeHtml(w.term)}</span>
+        <p class="word-card__preview">${escapeHtml(w.definition.slice(0, 80))}${w.definition.length > 80 ? '…' : ''}</p>
+        ${meta ? `<div class="word-card__meta">${meta}</div>` : ''}
+      </div>
+      <span class="word-card__arrow" aria-hidden="true">›</span>
+    </li>`;
+}
 
 function buildHubView(): string {
   const words = getAllWords().sort((a, b) =>
@@ -63,21 +144,7 @@ function buildHubView(): string {
       </section>`;
   }
 
-  const items = words
-    .map(
-      (w) => `
-      <li class="word-card" data-action="goto-detail" data-id="${escapeHtml(w.id)}" tabindex="0" role="button"
-          aria-label="View definition of ${escapeHtml(w.term)}">
-        <div class="word-card__body">
-          <span class="word-card__term">${escapeHtml(w.term)}</span>
-          <p class="word-card__preview">${escapeHtml(w.definition.slice(0, 90))}${w.definition.length > 90 ? '…' : ''}</p>
-          ${w.tags.length ? `<div class="word-card__tags">${renderTagChips(w.tags.slice(0, 4))}</div>` : ''}
-        </div>
-        <span class="word-card__arrow" aria-hidden="true">›</span>
-      </li>`,
-    )
-    .join('');
-
+  const items = words.map(buildWordCardHtml).join('');
   return `
     <section class="view" id="view-hub">
       <h2 class="view-title">Your Hub <span class="count">${words.length}</span></h2>
@@ -91,41 +158,22 @@ function buildSearchView(): string {
     a.term.toLowerCase().localeCompare(b.term.toLowerCase()),
   );
 
-  const items =
+  const listHtml =
     q && results.length === 0
       ? `<p class="no-results">No words found for "<em>${escapeHtml(q)}</em>".</p>`
-      : results
-          .map(
-            (w) => `
-        <li class="word-card" data-action="goto-detail" data-id="${escapeHtml(w.id)}" tabindex="0" role="button"
-            aria-label="View definition of ${escapeHtml(w.term)}">
-          <div class="word-card__body">
-            <span class="word-card__term">${escapeHtml(w.term)}</span>
-            <p class="word-card__preview">${escapeHtml(w.definition.slice(0, 90))}${w.definition.length > 90 ? '…' : ''}</p>
-            ${w.tags.length ? `<div class="word-card__tags">${renderTagChips(w.tags.slice(0, 4))}</div>` : ''}
-          </div>
-          <span class="word-card__arrow" aria-hidden="true">›</span>
-        </li>`,
-          )
-          .join('');
+      : `<ul class="word-list" role="list">${results.map(buildWordCardHtml).join('')}</ul>`;
 
   return `
     <section class="view" id="view-search">
       <h2 class="view-title">Search</h2>
       <div class="search-bar">
         <span class="search-bar__icon" aria-hidden="true">🔍</span>
-        <input
-          id="search-input"
-          class="search-bar__input"
-          type="search"
-          placeholder="Word, definition, tag…"
-          value="${escapeHtml(q)}"
-          autocomplete="off"
-          aria-label="Search your hub"
-        />
+        <input id="search-input" class="search-bar__input" type="search"
+          placeholder="Word, definition, category, tag…"
+          value="${escapeHtml(q)}" autocomplete="off" aria-label="Search your hub" />
       </div>
       <div id="search-results">
-        ${q || results.length ? `<ul class="word-list" role="list">${items}</ul>` : ''}
+        ${q || results.length ? listHtml : ''}
       </div>
     </section>`;
 }
@@ -136,17 +184,19 @@ function buildAddView(): string {
       <h2 class="view-title">Add a Word</h2>
       <form class="word-form" data-action="submit-add" novalidate>
         <div class="form-group">
-          <label class="form-label" for="add-term">Word / Term <span class="required">*</span></label>
+          <label class="form-label" for="add-term">Word / Expression <span class="required">*</span></label>
           <input id="add-term" class="form-input" type="text" name="term"
             placeholder="e.g. Epistemology" autocomplete="off" required />
           <span class="form-error" id="add-term-error" aria-live="polite"></span>
         </div>
         <div class="form-group">
-          <label class="form-label" for="add-def">Definition <span class="required">*</span></label>
+          <label class="form-label" for="add-def">Description <span class="required">*</span></label>
           <textarea id="add-def" class="form-textarea" name="definition"
             placeholder="Describe what this word means to you…" rows="5" required></textarea>
           <span class="form-error" id="add-def-error" aria-live="polite"></span>
         </div>
+        ${renderCategoryField('add')}
+        ${renderEmojiField('add')}
         <div class="form-group">
           <label class="form-label" for="add-tags">Tags <span class="hint">(comma separated)</span></label>
           <input id="add-tags" class="form-input" type="text" name="tags"
@@ -158,6 +208,10 @@ function buildAddView(): string {
 }
 
 function buildDetailView(word: Word): string {
+  const emojiDisplay = word.emoji
+    ? `<div class="detail__emoji">${escapeHtml(word.emoji)}</div>`
+    : '';
+
   return `
     <section class="view" id="view-detail">
       <div class="detail-header">
@@ -168,7 +222,9 @@ function buildDetailView(word: Word): string {
           ✏️
         </button>
       </div>
+      ${emojiDisplay}
       <h2 class="detail__term">${escapeHtml(word.term)}</h2>
+      ${word.category ? `<div class="detail__category">${renderCategoryBadge(word.category)}</div>` : ''}
       ${word.tags.length ? `<div class="detail__tags">${renderTagChips(word.tags)}</div>` : ''}
       <div class="detail__definition">${escapeHtml(word.definition).replace(/\n/g, '<br>')}</div>
       <div class="detail__meta">
@@ -192,16 +248,18 @@ function buildEditView(word: Word): string {
       <h2 class="view-title">Edit Word</h2>
       <form class="word-form" data-action="submit-edit" data-id="${escapeHtml(word.id)}" novalidate>
         <div class="form-group">
-          <label class="form-label" for="edit-term">Word / Term <span class="required">*</span></label>
+          <label class="form-label" for="edit-term">Word / Expression <span class="required">*</span></label>
           <input id="edit-term" class="form-input" type="text" name="term"
             value="${escapeHtml(word.term)}" required />
           <span class="form-error" id="edit-term-error" aria-live="polite"></span>
         </div>
         <div class="form-group">
-          <label class="form-label" for="edit-def">Definition <span class="required">*</span></label>
+          <label class="form-label" for="edit-def">Description <span class="required">*</span></label>
           <textarea id="edit-def" class="form-textarea" name="definition" rows="5" required>${escapeHtml(word.definition)}</textarea>
           <span class="form-error" id="edit-def-error" aria-live="polite"></span>
         </div>
+        ${renderCategoryField('edit', word.category)}
+        ${renderEmojiField('edit', word.emoji)}
         <div class="form-group">
           <label class="form-label" for="edit-tags">Tags <span class="hint">(comma separated)</span></label>
           <input id="edit-tags" class="form-input" type="text" name="tags"
@@ -238,7 +296,7 @@ function buildNav(): string {
     </nav>`;
 }
 
-// ── main render ────────────────────────────────────────────────────────────
+// ── Main render ────────────────────────────────────────────────────────────
 
 export function render(): void {
   const app = document.getElementById('app')!;
@@ -292,12 +350,12 @@ export function render(): void {
   attachEventListeners();
 }
 
-// ── event delegation ───────────────────────────────────────────────────────
+// ── Event delegation ───────────────────────────────────────────────────────
 
 function attachEventListeners(): void {
   const app = document.getElementById('app')!;
 
-  // Search input
+  // Live search
   const searchInput = document.getElementById('search-input') as HTMLInputElement | null;
   if (searchInput) {
     requestAnimationFrame(() => searchInput.focus());
@@ -317,22 +375,8 @@ function attachEventListeners(): void {
         resultsEl.innerHTML = `<p class="no-results">No words found for "<em>${escapeHtml(q)}</em>".</p>`;
         return;
       }
-      const items = results
-        .map(
-          (w) => `
-          <li class="word-card" data-action="goto-detail" data-id="${escapeHtml(w.id)}" tabindex="0" role="button"
-              aria-label="View definition of ${escapeHtml(w.term)}">
-            <div class="word-card__body">
-              <span class="word-card__term">${escapeHtml(w.term)}</span>
-              <p class="word-card__preview">${escapeHtml(w.definition.slice(0, 90))}${w.definition.length > 90 ? '…' : ''}</p>
-              ${w.tags.length ? `<div class="word-card__tags">${renderTagChips(w.tags.slice(0, 4))}</div>` : ''}
-            </div>
-            <span class="word-card__arrow" aria-hidden="true">›</span>
-          </li>`,
-        )
-        .join('');
-      resultsEl.innerHTML = `<ul class="word-list" role="list">${items}</ul>`;
-      // No need to re-attach – click/keydown delegation is already on #app
+      resultsEl.innerHTML = `<ul class="word-list" role="list">${results.map(buildWordCardHtml).join('')}</ul>`;
+      // delegation on #app already handles clicks inside results
     });
   }
 
@@ -375,74 +419,101 @@ function handleAction(e: MouseEvent): void {
         navigate('hub');
       }
       break;
+    case 'pick-emoji': {
+      // Fill the emoji input with the chosen emoji
+      const emoji = target.dataset.emoji;
+      const targetInputId = target.dataset.target;
+      if (emoji && targetInputId) {
+        const input = document.getElementById(targetInputId) as HTMLInputElement | null;
+        if (input) {
+          input.value = emoji;
+          // highlight the selected button
+          const picker = input.closest('.form-group')?.nextElementSibling;
+          picker?.querySelectorAll<HTMLButtonElement>('.emoji-btn--selected').forEach((b) => {
+            b.classList.remove('emoji-btn--selected');
+          });
+          target.classList.add('emoji-btn--selected');
+        }
+      }
+      break;
+    }
     case 'submit-add': {
       e.preventDefault();
-      const form = target as HTMLFormElement;
-      submitAddForm(form);
+      submitAddForm(target as HTMLFormElement);
       break;
     }
     case 'submit-edit': {
       e.preventDefault();
-      const form = target as HTMLFormElement;
-      submitEditForm(form, id!);
+      submitEditForm(target as HTMLFormElement, id!);
       break;
     }
   }
 }
 
-// ── form handlers ──────────────────────────────────────────────────────────
+// ── Form handlers ──────────────────────────────────────────────────────────
 
 function submitAddForm(form: HTMLFormElement): void {
   const termInput = form.querySelector<HTMLInputElement>('#add-term')!;
   const defInput = form.querySelector<HTMLTextAreaElement>('#add-def')!;
+  const categoryInput = form.querySelector<HTMLInputElement>('#add-category')!;
+  const emojiInput = form.querySelector<HTMLInputElement>('#add-emoji')!;
   const tagsInput = form.querySelector<HTMLInputElement>('#add-tags')!;
 
   let valid = true;
-
   if (!termInput.value.trim()) {
-    showError('add-term-error', 'Please enter a word or term.');
+    showError('add-term-error', 'Please enter a word or expression.');
     valid = false;
   } else {
     clearError('add-term-error');
   }
-
   if (!defInput.value.trim()) {
-    showError('add-def-error', 'Please enter a definition.');
+    showError('add-def-error', 'Please enter a description.');
     valid = false;
   } else {
     clearError('add-def-error');
   }
-
   if (!valid) return;
 
-  addWord(termInput.value, defInput.value, parseTags(tagsInput.value));
+  addWord(
+    termInput.value,
+    defInput.value,
+    categoryInput.value,
+    emojiInput.value,
+    parseTags(tagsInput.value),
+  );
   navigate('hub');
 }
 
 function submitEditForm(form: HTMLFormElement, wordId: string): void {
   const termInput = form.querySelector<HTMLInputElement>('#edit-term')!;
   const defInput = form.querySelector<HTMLTextAreaElement>('#edit-def')!;
+  const categoryInput = form.querySelector<HTMLInputElement>('#edit-category')!;
+  const emojiInput = form.querySelector<HTMLInputElement>('#edit-emoji')!;
   const tagsInput = form.querySelector<HTMLInputElement>('#edit-tags')!;
 
   let valid = true;
-
   if (!termInput.value.trim()) {
-    showError('edit-term-error', 'Please enter a word or term.');
+    showError('edit-term-error', 'Please enter a word or expression.');
     valid = false;
   } else {
     clearError('edit-term-error');
   }
-
   if (!defInput.value.trim()) {
-    showError('edit-def-error', 'Please enter a definition.');
+    showError('edit-def-error', 'Please enter a description.');
     valid = false;
   } else {
     clearError('edit-def-error');
   }
-
   if (!valid) return;
 
-  updateWord(wordId, termInput.value, defInput.value, parseTags(tagsInput.value));
+  updateWord(
+    wordId,
+    termInput.value,
+    defInput.value,
+    categoryInput.value,
+    emojiInput.value,
+    parseTags(tagsInput.value),
+  );
   navigate('detail', wordId);
 }
 

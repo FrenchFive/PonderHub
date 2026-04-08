@@ -10,7 +10,12 @@ export function getAllWords(): Word[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return [];
-    return JSON.parse(raw) as Word[];
+    // Back-compat: fill in category/emoji for entries saved before this field existed
+    return (JSON.parse(raw) as Partial<Word>[]).map((w) => ({
+      category: '',
+      emoji: '',
+      ...w,
+    })) as Word[];
   } catch {
     return [];
   }
@@ -20,13 +25,29 @@ function saveAll(words: Word[]): void {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(words));
 }
 
-export function addWord(term: string, definition: string, tags: string[]): Word {
+/** Returns all unique, non-empty categories in use, sorted alphabetically. */
+export function getCategories(): string[] {
+  const cats = getAllWords()
+    .map((w) => w.category.trim())
+    .filter(Boolean);
+  return [...new Set(cats)].sort((a, b) => a.localeCompare(b));
+}
+
+export function addWord(
+  term: string,
+  definition: string,
+  category: string,
+  emoji: string,
+  tags: string[],
+): Word {
   const words = getAllWords();
   const now = Date.now();
   const word: Word = {
     id: generateId(),
     term: term.trim(),
     definition: definition.trim(),
+    category: category.trim(),
+    emoji: emoji.trim(),
     tags: tags.map((t) => t.trim()).filter(Boolean),
     createdAt: now,
     updatedAt: now,
@@ -40,6 +61,8 @@ export function updateWord(
   id: string,
   term: string,
   definition: string,
+  category: string,
+  emoji: string,
   tags: string[],
 ): Word | null {
   const words = getAllWords();
@@ -49,6 +72,8 @@ export function updateWord(
     ...words[idx],
     term: term.trim(),
     definition: definition.trim(),
+    category: category.trim(),
+    emoji: emoji.trim(),
     tags: tags.map((t) => t.trim()).filter(Boolean),
     updatedAt: Date.now(),
   };
@@ -72,6 +97,7 @@ export function searchWords(query: string): Word[] {
     (w) =>
       w.term.toLowerCase().includes(q) ||
       w.definition.toLowerCase().includes(q) ||
+      w.category.toLowerCase().includes(q) ||
       w.tags.some((t) => t.toLowerCase().includes(q)),
   );
 }
