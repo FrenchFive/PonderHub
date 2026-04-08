@@ -7,16 +7,19 @@ import {
   searchWords,
   getWord,
   getCategories,
+  getSources,
 } from './storage';
 import { createIcons,
   ArrowLeft, Plus, Search, Pencil, Trash2, ChevronRight, BookOpen,
-  FileText, Calendar, Link2, Clock, X, Layers, ChevronUp,
+  FileText, Calendar, Link2, Clock, X, Layers, ChevronUp, SlidersHorizontal,
+  ChevronDown, FolderPlus,
 } from 'lucide';
 
 // ── Icon registry for createIcons (UI only) ──────────────────────────────
 const ICON_REGISTRY = {
   ArrowLeft, Plus, Search, Pencil, Trash2, ChevronRight, BookOpen,
-  FileText, Calendar, Link2, Clock, X, Layers, ChevronUp,
+  FileText, Calendar, Link2, Clock, X, Layers, ChevronUp, SlidersHorizontal,
+  ChevronDown, FolderPlus,
 };
 
 // ── Curated emoji picks for word personalisation ─────────────────────────
@@ -52,6 +55,8 @@ const state: AppState = {
   currentView: 'hub',
   selectedWordId: null,
   searchQuery: '',
+  filterCategory: '',
+  filterSource: '',
 };
 
 /** The emoji currently chosen in the add/edit form */
@@ -81,10 +86,38 @@ function randomEmoji(): string {
   return EMOJI_PICKS[Math.floor(Math.random() * EMOJI_PICKS.length)];
 }
 
+/** Generates random floating shapes for memo card visual variety */
+function buildMemoShapes(hue: number): string {
+  const shapeTypes = ['circle', 'square', 'triangle', 'ring', 'diamond'];
+  const count = 4 + Math.floor(Math.random() * 3); // 4-6 shapes
+  let html = '';
+  for (let i = 0; i < count; i++) {
+    const type = shapeTypes[Math.floor(Math.random() * shapeTypes.length)];
+    const size = 20 + Math.floor(Math.random() * 50);
+    const x = Math.floor(Math.random() * 90);
+    const y = Math.floor(Math.random() * 90);
+    const rotation = Math.floor(Math.random() * 360);
+    const opacity = 0.08 + Math.random() * 0.15;
+    const hueShift = Math.floor(Math.random() * 60) - 30;
+    html += `<span class="memo-shape memo-shape--${type}" style="
+      --shape-size: ${size}px;
+      --shape-x: ${x}%;
+      --shape-y: ${y}%;
+      --shape-rot: ${rotation}deg;
+      --shape-opacity: ${opacity};
+      --shape-hue: ${hue + hueShift};
+    " aria-hidden="true"></span>`;
+  }
+  return html;
+}
+
+/** Debounce timer for source suggestions */
+let sourceDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+
 function navigate(view: AppState['currentView'], wordId?: string): void {
   state.currentView = view;
   state.selectedWordId = wordId ?? null;
-  if (view === 'hub') state.searchQuery = '';
+  if (view === 'hub') { state.searchQuery = ''; state.filterCategory = ''; state.filterSource = ''; }
   if (view === 'add') formEmojiValue = '';
   if (view === 'memo' && !memoWord) pickNextMemoWord();
   render();
@@ -188,21 +221,37 @@ function buildEmojiDialog(currentValue: string, targetId: string): string {
 
 function renderCategoryField(prefix: string, value = ''): string {
   const cats = getCategories();
-  const chips = cats.map(
+  const options = cats.map(
     (c) =>
-      `<button type="button" class="category-chip ${value === c ? 'category-chip--selected' : ''}"
-         data-action="pick-category" data-category="${escapeHtml(c)}" data-target="${prefix}-category">${escapeHtml(c)}</button>`,
+      `<button type="button" class="cat-dropdown__item ${value === c ? 'cat-dropdown__item--selected' : ''}"
+         data-action="pick-category" data-category="${escapeHtml(c)}" data-target="${prefix}-category">
+        <span>${escapeHtml(c)}</span>
+        ${value === c ? icon('chevron-right', '', 14) : ''}
+      </button>`,
   ).join('');
   return `
     <div class="form-group">
-      <label class="form-label" for="${prefix}-category">
+      <label class="form-label">
         Category <span class="hint">(optional)</span>
       </label>
-      ${cats.length ? `<div class="category-chips">${chips}</div>` : ''}
-      <input id="${prefix}-category" class="form-input" type="text" name="category"
-        placeholder="Type a new category or tap above…"
-        value="${escapeHtml(value)}"
-        autocomplete="off" />
+      <input id="${prefix}-category" type="hidden" name="category" value="${escapeHtml(value)}" />
+      <div class="cat-dropdown" id="${prefix}-cat-dropdown">
+        <button type="button" class="cat-dropdown__trigger" data-action="toggle-cat-dropdown" data-target="${prefix}-cat-dropdown">
+          <span class="cat-dropdown__value">${value ? escapeHtml(value) : 'Select a category…'}</span>
+          ${icon('chevron-down', 'cat-dropdown__arrow', 16)}
+        </button>
+        <div class="cat-dropdown__menu">
+          ${cats.length ? `<div class="cat-dropdown__items">${options}</div>` : '<div class="cat-dropdown__empty">No categories yet</div>'}
+          <button type="button" class="cat-dropdown__add-btn" data-action="show-cat-input" data-target="${prefix}-cat-dropdown">
+            ${icon('folder-plus', '', 16)}
+            <span>Add new category</span>
+          </button>
+          <div class="cat-dropdown__new-input" style="display:none">
+            <input class="form-input cat-dropdown__input" type="text" placeholder="New category name…" autocomplete="off" />
+            <button type="button" class="cat-dropdown__confirm-btn" data-action="confirm-new-cat" data-target="${prefix}-category">Add</button>
+          </div>
+        </div>
+      </div>
     </div>`;
 }
 
@@ -212,10 +261,13 @@ function renderSourceField(prefix: string, value = ''): string {
       <label class="form-label" for="${prefix}-source">
         Source <span class="hint">(where you learned it)</span>
       </label>
-      <input id="${prefix}-source" class="form-input" type="text" name="source"
-        placeholder="e.g. Book, podcast, conversation…"
-        value="${escapeHtml(value)}"
-        autocomplete="off" />
+      <div class="source-field" id="${prefix}-source-wrap">
+        <input id="${prefix}-source" class="form-input" type="text" name="source"
+          placeholder="e.g. Book, podcast, conversation…"
+          value="${escapeHtml(value)}"
+          autocomplete="off" />
+        <div class="source-suggestions" id="${prefix}-source-suggestions"></div>
+      </div>
     </div>`;
 }
 
@@ -248,20 +300,69 @@ function buildWordCardHtml(w: Word): string {
 
 function buildHubView(): string {
   const q = state.searchQuery;
-  const allWords = q ? searchWords(q) : getAllWords();
+  let allWords = q ? searchWords(q) : getAllWords();
+
+  // Apply filters
+  if (state.filterCategory) {
+    allWords = allWords.filter((w) => w.category === state.filterCategory);
+  }
+  if (state.filterSource) {
+    allWords = allWords.filter((w) => w.source === state.filterSource);
+  }
+
   const words = allWords.sort((a, b) =>
     a.term.toLowerCase().localeCompare(b.term.toLowerCase()),
   );
 
+  const hasFilters = !!(state.filterCategory || state.filterSource);
+  const hasAny = q || hasFilters;
+
   const listHtml = words.length === 0
-    ? (q
-      ? `<p class="no-results">No words found for "<em>${escapeHtml(q)}</em>".</p>`
+    ? (hasAny
+      ? `<p class="no-results">No words found${q ? ` for "<em>${escapeHtml(q)}</em>"` : ''}${hasFilters ? ' with current filters' : ''}.</p>`
       : `<div class="empty-state">
           <div class="empty-icon">${icon('book-open', '', 48)}</div>
           <p class="empty-msg">Your personal encyclopedia is empty.<br>
             Tap the button above to add your first word!</p>
         </div>`)
     : `<ul class="word-list" role="list">${words.map(buildWordCardHtml).join('')}</ul>`;
+
+  // Build filter dropdown
+  const categories = getCategories();
+  const sources = getSources();
+  const filterActive = hasFilters;
+
+  const filterDropdown = `
+    <div class="filter-dropdown" id="filter-dropdown">
+      <button class="filter-toggle ${filterActive ? 'filter-toggle--active' : ''}" data-action="toggle-filter" aria-label="Filter">
+        ${icon('sliders-horizontal', '', 18)}
+      </button>
+      <div class="filter-dropdown__menu" id="filter-menu">
+        <div class="filter-dropdown__section">
+          <div class="filter-dropdown__label">Category</div>
+          <div class="filter-dropdown__options">
+            <button type="button" class="filter-option ${!state.filterCategory ? 'filter-option--active' : ''}"
+              data-action="set-filter-category" data-value="">All</button>
+            ${categories.map((c) => `<button type="button" class="filter-option ${state.filterCategory === c ? 'filter-option--active' : ''}"
+              data-action="set-filter-category" data-value="${escapeHtml(c)}">${escapeHtml(c)}</button>`).join('')}
+          </div>
+        </div>
+        <div class="filter-dropdown__section">
+          <div class="filter-dropdown__label">Source</div>
+          <div class="filter-dropdown__options">
+            <button type="button" class="filter-option ${!state.filterSource ? 'filter-option--active' : ''}"
+              data-action="set-filter-source" data-value="">All</button>
+            ${sources.map((s) => `<button type="button" class="filter-option ${state.filterSource === s ? 'filter-option--active' : ''}"
+              data-action="set-filter-source" data-value="${escapeHtml(s)}">${escapeHtml(s)}</button>`).join('')}
+          </div>
+        </div>
+      </div>
+    </div>`;
+
+  // Active filter chips
+  const activeFilters = [];
+  if (state.filterCategory) activeFilters.push(`<span class="active-filter" data-action="clear-filter-category">${escapeHtml(state.filterCategory)} ${icon('x', '', 12)}</span>`);
+  if (state.filterSource) activeFilters.push(`<span class="active-filter" data-action="clear-filter-source">${escapeHtml(state.filterSource)} ${icon('x', '', 12)}</span>`);
 
   return `
     <section class="view" id="view-hub">
@@ -272,11 +373,14 @@ function buildHubView(): string {
             placeholder="Search words…"
             value="${escapeHtml(q)}" autocomplete="off" aria-label="Search your hub" />
         </div>
+        ${filterDropdown}
         <button class="btn-add" data-action="goto-add" aria-label="Add a word">
           ${icon('plus', '', 22)}
         </button>
       </div>
-      ${!q && words.length > 0 ? `<div class="hub-count">${words.length} word${words.length !== 1 ? 's' : ''}</div>` : ''}
+      ${activeFilters.length ? `<div class="active-filters">${activeFilters.join('')}</div>` : ''}
+      ${!hasAny && words.length > 0 ? `<div class="hub-count">${words.length} word${words.length !== 1 ? 's' : ''}</div>` : ''}
+      ${hasFilters && words.length > 0 ? `<div class="hub-count">${words.length} result${words.length !== 1 ? 's' : ''}</div>` : ''}
       <div id="search-results">${listHtml}</div>
     </section>`;
 }
@@ -430,6 +534,10 @@ function buildMemoView(): string {
   const clueLabel = memoShowField === 'meaning' ? 'Meaning' : 'Description';
   const emojiDisplay = memoWord.emoji || '📄';
 
+  // Random visual variety per card
+  const hue = Math.floor(Math.random() * 360);
+  const shapes = buildMemoShapes(hue);
+
   return `
     <section class="view memo-view" id="view-memo">
       <div class="memo-stage" id="memo-stage">
@@ -438,7 +546,8 @@ function buildMemoView(): string {
           <span class="memo-reveal__term">${escapeHtml(memoWord.term)}</span>
           <span class="memo-reveal__hint">↑ swipe up for next</span>
         </div>
-        <div class="memo-card" id="memo-card">
+        <div class="memo-card" id="memo-card" style="--card-hue: ${hue}">
+          ${shapes}
           <span class="memo-card__type">${clueLabel}</span>
           <p class="memo-card__text">${escapeHtml(clueText)}</p>
           <span class="memo-card__hint">← swipe to reveal word →</span>
@@ -629,14 +738,17 @@ function attachEventListeners(): void {
       const resultsEl = document.getElementById('search-results');
       if (!resultsEl) return;
       const q = state.searchQuery;
-      const results = q ? searchWords(q) : getAllWords();
+      let results = q ? searchWords(q) : getAllWords();
+      if (state.filterCategory) results = results.filter((w) => w.category === state.filterCategory);
+      if (state.filterSource) results = results.filter((w) => w.source === state.filterSource);
       const sorted = results.sort((a, b) =>
         a.term.toLowerCase().localeCompare(b.term.toLowerCase()),
       );
 
+      const hasFilters = !!(state.filterCategory || state.filterSource);
       if (sorted.length === 0) {
-        resultsEl.innerHTML = q
-          ? `<p class="no-results">No words found for "<em>${escapeHtml(q)}</em>".</p>`
+        resultsEl.innerHTML = (q || hasFilters)
+          ? `<p class="no-results">No words found${q ? ` for "<em>${escapeHtml(q)}</em>"` : ''}${hasFilters ? ' with current filters' : ''}.</p>`
           : `<div class="empty-state">
               <div class="empty-icon"><i data-lucide="book-open" style="width:48px;height:48px"></i></div>
               <p class="empty-msg">Your personal encyclopedia is empty.<br>
@@ -648,11 +760,51 @@ function attachEventListeners(): void {
       // Update count
       const countEl = document.querySelector('.hub-count');
       if (countEl) {
-        countEl.textContent = q ? '' : `${sorted.length} word${sorted.length !== 1 ? 's' : ''}`;
+        countEl.textContent = (q && !hasFilters) ? '' : `${sorted.length} result${sorted.length !== 1 ? 's' : ''}`;
       }
       createIcons({ icons: ICON_REGISTRY });
     });
   }
+
+  // Source suggestion with debounce
+  document.querySelectorAll<HTMLInputElement>('[id$="-source"]').forEach((sourceInput) => {
+    if (!sourceInput.id.endsWith('-source')) return;
+    sourceInput.addEventListener('input', () => {
+      if (sourceDebounceTimer) clearTimeout(sourceDebounceTimer);
+      const wrap = sourceInput.closest('.source-field');
+      const suggestionsEl = wrap?.querySelector('.source-suggestions') as HTMLElement | null;
+      if (!suggestionsEl) return;
+
+      const val = sourceInput.value.trim().toLowerCase();
+      if (val.length < 2) {
+        suggestionsEl.innerHTML = '';
+        return;
+      }
+
+      sourceDebounceTimer = setTimeout(() => {
+        const allSources = getSources();
+        const matches = allSources.filter((s) =>
+          s.toLowerCase().includes(val) && s.toLowerCase() !== val,
+        );
+        if (matches.length === 0) {
+          suggestionsEl.innerHTML = '';
+          return;
+        }
+        suggestionsEl.innerHTML = matches.map((s) =>
+          `<button type="button" class="source-suggestion" data-action="pick-source" data-value="${escapeHtml(s)}">${escapeHtml(s)}</button>`,
+        ).join('');
+        createIcons({ icons: ICON_REGISTRY });
+      }, 300);
+    });
+
+    // Hide suggestions on blur (delayed to allow click)
+    sourceInput.addEventListener('blur', () => {
+      setTimeout(() => {
+        const suggestionsEl = sourceInput.closest('.source-field')?.querySelector('.source-suggestions') as HTMLElement | null;
+        if (suggestionsEl) suggestionsEl.innerHTML = '';
+      }, 200);
+    });
+  });
 
   // Click / keyboard delegation
   app.addEventListener('click', handleAction);
@@ -721,23 +873,134 @@ function handleAction(e: MouseEvent): void {
       }
       break;
     }
+    case 'toggle-cat-dropdown': {
+      const dropdownId = target.dataset.target;
+      if (dropdownId) {
+        const dropdown = document.getElementById(dropdownId);
+        if (dropdown) {
+          dropdown.classList.toggle('cat-dropdown--open');
+          // Close on outside click
+          if (dropdown.classList.contains('cat-dropdown--open')) {
+            setTimeout(() => {
+              const closer = (ev: MouseEvent) => {
+                if (!dropdown.contains(ev.target as Node)) {
+                  dropdown.classList.remove('cat-dropdown--open');
+                  document.removeEventListener('click', closer);
+                }
+              };
+              document.addEventListener('click', closer);
+            }, 0);
+          }
+        }
+      }
+      break;
+    }
     case 'pick-category': {
       const cat = target.dataset.category ?? '';
       const targetInputId = target.dataset.target;
       if (targetInputId) {
         const input = document.getElementById(targetInputId) as HTMLInputElement | null;
         if (input) {
-          // Toggle: if already selected, clear it
           if (input.value === cat) {
             input.value = '';
           } else {
             input.value = cat;
           }
-          // Update chip selection visuals
-          document.querySelectorAll<HTMLButtonElement>('.category-chip').forEach((c) => {
-            c.classList.toggle('category-chip--selected', c.dataset.category === input.value);
+          // Update trigger text
+          const dropdown = input.closest('.form-group')?.querySelector('.cat-dropdown');
+          const valueSpan = dropdown?.querySelector('.cat-dropdown__value');
+          if (valueSpan) valueSpan.textContent = input.value || 'Select a category…';
+          // Update selected state
+          dropdown?.querySelectorAll<HTMLButtonElement>('.cat-dropdown__item').forEach((c) => {
+            c.classList.toggle('cat-dropdown__item--selected', c.dataset.category === input.value);
           });
+          // Close dropdown
+          dropdown?.classList.remove('cat-dropdown--open');
         }
+      }
+      break;
+    }
+    case 'show-cat-input': {
+      const dropdownId = target.dataset.target;
+      if (dropdownId) {
+        const dropdown = document.getElementById(dropdownId);
+        const newInput = dropdown?.querySelector('.cat-dropdown__new-input') as HTMLElement;
+        const addBtn = dropdown?.querySelector('.cat-dropdown__add-btn') as HTMLElement;
+        if (newInput && addBtn) {
+          addBtn.style.display = 'none';
+          newInput.style.display = 'flex';
+          const inp = newInput.querySelector('input');
+          if (inp) inp.focus();
+        }
+      }
+      break;
+    }
+    case 'confirm-new-cat': {
+      const targetInputId = target.dataset.target;
+      if (targetInputId) {
+        const dropdown = target.closest('.cat-dropdown');
+        const newInput = dropdown?.querySelector('.cat-dropdown__input') as HTMLInputElement;
+        if (newInput && newInput.value.trim()) {
+          const newCat = newInput.value.trim();
+          const hiddenInput = document.getElementById(targetInputId) as HTMLInputElement;
+          if (hiddenInput) {
+            hiddenInput.value = newCat;
+            const valueSpan = dropdown?.querySelector('.cat-dropdown__value');
+            if (valueSpan) valueSpan.textContent = newCat;
+          }
+          dropdown?.classList.remove('cat-dropdown--open');
+        }
+      }
+      break;
+    }
+    case 'toggle-filter': {
+      const menu = document.getElementById('filter-menu');
+      const dropdown = document.getElementById('filter-dropdown');
+      if (menu && dropdown) {
+        dropdown.classList.toggle('filter-dropdown--open');
+        if (dropdown.classList.contains('filter-dropdown--open')) {
+          setTimeout(() => {
+            const closer = (ev: MouseEvent) => {
+              if (!dropdown.contains(ev.target as Node)) {
+                dropdown.classList.remove('filter-dropdown--open');
+                document.removeEventListener('click', closer);
+              }
+            };
+            document.addEventListener('click', closer);
+          }, 0);
+        }
+      }
+      break;
+    }
+    case 'set-filter-category': {
+      state.filterCategory = target.dataset.value ?? '';
+      document.getElementById('filter-dropdown')?.classList.remove('filter-dropdown--open');
+      render();
+      break;
+    }
+    case 'set-filter-source': {
+      state.filterSource = target.dataset.value ?? '';
+      document.getElementById('filter-dropdown')?.classList.remove('filter-dropdown--open');
+      render();
+      break;
+    }
+    case 'clear-filter-category': {
+      state.filterCategory = '';
+      render();
+      break;
+    }
+    case 'clear-filter-source': {
+      state.filterSource = '';
+      render();
+      break;
+    }
+    case 'pick-source': {
+      const sourceVal = target.dataset.value ?? '';
+      const sourceInput = target.closest('.source-field')?.querySelector('input') as HTMLInputElement;
+      if (sourceInput) {
+        sourceInput.value = sourceVal;
+        const suggestionsEl = target.closest('.source-field')?.querySelector('.source-suggestions') as HTMLElement;
+        if (suggestionsEl) suggestionsEl.innerHTML = '';
       }
       break;
     }

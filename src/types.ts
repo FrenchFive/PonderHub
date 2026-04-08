@@ -17,4 +17,6 @@ export interface AppState {
   currentView: View;
   selectedWordId: string | null;
   searchQuery: string;
+  filterCategory: string;
+  filterSource: string;
 }
