@@ -10,10 +10,11 @@ export function getAllWords(): Word[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return [];
-    // Back-compat: fill in category/emoji for entries saved before this field existed
+    // Back-compat: fill in category/emoji/source for entries saved before these fields existed
     return (JSON.parse(raw) as Partial<Word>[]).map((w) => ({
       category: '',
       emoji: '',
+      source: '',
       ...w,
     })) as Word[];
   } catch {
@@ -39,6 +40,7 @@ export function addWord(
   category: string,
   emoji: string,
   tags: string[],
+  source: string,
 ): Word {
   const words = getAllWords();
   const now = Date.now();
@@ -49,6 +51,7 @@ export function addWord(
     category: category.trim(),
     emoji: emoji.trim(),
     tags: tags.map((t) => t.trim()).filter(Boolean),
+    source: source.trim(),
     createdAt: now,
     updatedAt: now,
   };
@@ -64,6 +67,7 @@ export function updateWord(
   category: string,
   emoji: string,
   tags: string[],
+  source: string,
 ): Word | null {
   const words = getAllWords();
   const idx = words.findIndex((w) => w.id === id);
@@ -75,6 +79,7 @@ export function updateWord(
     category: category.trim(),
     emoji: emoji.trim(),
     tags: tags.map((t) => t.trim()).filter(Boolean),
+    source: source.trim(),
     updatedAt: Date.now(),
   };
   saveAll(words);
@@ -98,6 +103,7 @@ export function searchWords(query: string): Word[] {
       w.term.toLowerCase().includes(q) ||
       w.definition.toLowerCase().includes(q) ||
       w.category.toLowerCase().includes(q) ||
-      w.tags.some((t) => t.toLowerCase().includes(q)),
+      w.tags.some((t) => t.toLowerCase().includes(q)) ||
+      w.source.toLowerCase().includes(q),
   );
 }

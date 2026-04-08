@@ -8,12 +8,23 @@ import {
   getWord,
   getCategories,
 } from './storage';
+import { createIcons,
+  ArrowLeft, Plus, Search, Pencil, Trash2, ChevronRight, BookOpen,
+  FileText, Calendar, Link2, Clock, X,
+} from 'lucide';
 
-// ── Quick-pick emojis ──────────────────────────────────────────────────────
+// ── Icon registry for createIcons (UI only) ──────────────────────────────
+const ICON_REGISTRY = {
+  ArrowLeft, Plus, Search, Pencil, Trash2, ChevronRight, BookOpen,
+  FileText, Calendar, Link2, Clock, X,
+};
+
+// ── Curated emoji picks for word personalisation ─────────────────────────
 const EMOJI_PICKS = [
   '📖','🧠','💡','🔑','🌍','🎯','✨','🔬','🎨','🎭',
   '🌱','⚡','🔥','💎','🌊','🦋','🏆','🧩','🌀','💫',
   '🗺️','📝','🔭','⚗️','🎵','🌙','☀️','❄️','🌿','🦉',
+  '💬','🫀','🪐','🧬','📐','🎲','🔮','🍀','🕊️','🧿',
 ];
 
 // ── State ──────────────────────────────────────────────────────────────────
@@ -23,9 +34,18 @@ const state: AppState = {
   searchQuery: '',
 };
 
+/** The emoji currently chosen in the add/edit form */
+let formEmojiValue = '';
+
+function randomEmoji(): string {
+  return EMOJI_PICKS[Math.floor(Math.random() * EMOJI_PICKS.length)];
+}
+
 function navigate(view: AppState['currentView'], wordId?: string): void {
   state.currentView = view;
   state.selectedWordId = wordId ?? null;
+  if (view === 'hub') state.searchQuery = '';
+  if (view === 'add') formEmojiValue = '';  // will be assigned a random emoji in buildAddView
   render();
 }
 
@@ -48,6 +68,13 @@ function formatDate(ts: number): string {
   });
 }
 
+function formatTime(ts: number): string {
+  return new Date(ts).toLocaleTimeString(undefined, {
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
 function parseTags(raw: string): string[] {
   return raw.split(',').map((t) => t.trim()).filter(Boolean);
 }
@@ -61,49 +88,90 @@ function renderCategoryBadge(category: string): string {
   return `<span class="category-badge">${escapeHtml(category)}</span>`;
 }
 
-function renderEmojiField(prefix: string, value = ''): string {
-  const picks = EMOJI_PICKS.map(
-    (e) =>
-      `<button type="button" class="emoji-btn" data-action="pick-emoji"
-         data-emoji="${e}" data-target="${prefix}-emoji" aria-label="${e}">${e}</button>`,
-  ).join('');
+/** Returns an <i> tag that createIcons will replace with an SVG */
+function icon(name: string, cls = '', size = 20): string {
+  return `<i data-lucide="${name}" class="${cls}" style="width:${size}px;height:${size}px"></i>`;
+}
+
+function renderEmojiField(prefix: string, value: string): string {
+  const display = value || '📄';
   return `
     <div class="form-group">
-      <label class="form-label" for="${prefix}-emoji">
-        Emoji <span class="hint">(optional)</span>
-      </label>
-      <div class="emoji-field">
-        <input id="${prefix}-emoji" class="form-input emoji-input" type="text" name="emoji"
-          placeholder="🧠" value="${escapeHtml(value)}" autocomplete="off" maxlength="10" />
+      <label class="form-label">Emoji</label>
+      <input id="${prefix}-emoji" type="hidden" name="emoji" value="${escapeHtml(value)}" />
+      <button type="button" class="emoji-trigger" data-action="open-emoji-picker" data-target="${prefix}-emoji" aria-label="Choose emoji">
+        <span class="emoji-trigger__preview">${display}</span>
+        <span class="emoji-trigger__label">Tap to change</span>
+        ${icon('chevron-right', 'emoji-trigger__arrow', 16)}
+      </button>
+    </div>`;
+}
+
+function buildEmojiDialog(currentValue: string, targetId: string): string {
+  const items = EMOJI_PICKS.map(
+    (em) =>
+      `<button type="button" class="dialog-emoji-btn ${currentValue === em ? 'dialog-emoji-btn--selected' : ''}"
+         data-action="select-emoji" data-emoji="${em}" data-target="${targetId}"
+         aria-label="${em}">${em}</button>`,
+  ).join('');
+
+  return `
+    <div class="emoji-dialog-backdrop" data-action="close-emoji-picker">
+      <div class="emoji-dialog" role="dialog" aria-label="Choose an emoji">
+        <div class="emoji-dialog__header">
+          <span class="emoji-dialog__title">Choose Emoji</span>
+          <button type="button" class="emoji-dialog__close" data-action="close-emoji-picker" aria-label="Close">
+            ${icon('x', '', 20)}
+          </button>
+        </div>
+        <div class="emoji-dialog__grid">${items}</div>
+        <div class="emoji-dialog__custom">
+          <input class="emoji-dialog__input" type="text" placeholder="Or type / paste your own emoji…"
+            data-target="${targetId}" maxlength="10" autocomplete="off" />
+          <button type="button" class="emoji-dialog__use-btn" data-action="use-custom-emoji" data-target="${targetId}">Use</button>
+        </div>
       </div>
-      <div class="emoji-picker">${picks}</div>
     </div>`;
 }
 
 function renderCategoryField(prefix: string, value = ''): string {
   const cats = getCategories();
-  const options = cats
-    .map((c) => `<option value="${escapeHtml(c)}"></option>`)
-    .join('');
+  const chips = cats.map(
+    (c) =>
+      `<button type="button" class="category-chip ${value === c ? 'category-chip--selected' : ''}"
+         data-action="pick-category" data-category="${escapeHtml(c)}" data-target="${prefix}-category">${escapeHtml(c)}</button>`,
+  ).join('');
   return `
     <div class="form-group">
       <label class="form-label" for="${prefix}-category">
         Category <span class="hint">(optional)</span>
       </label>
+      ${cats.length ? `<div class="category-chips">${chips}</div>` : ''}
       <input id="${prefix}-category" class="form-input" type="text" name="category"
-        list="${prefix}-category-list"
-        placeholder="e.g. Philosophy"
+        placeholder="Type a new category or tap above…"
         value="${escapeHtml(value)}"
         autocomplete="off" />
-      <datalist id="${prefix}-category-list">${options}</datalist>
+    </div>`;
+}
+
+function renderSourceField(prefix: string, value = ''): string {
+  return `
+    <div class="form-group">
+      <label class="form-label" for="${prefix}-source">
+        Source <span class="hint">(where you learned it)</span>
+      </label>
+      <input id="${prefix}-source" class="form-input" type="text" name="source"
+        placeholder="e.g. Book, podcast, conversation…"
+        value="${escapeHtml(value)}"
+        autocomplete="off" />
     </div>`;
 }
 
 // ── View builders ──────────────────────────────────────────────────────────
 
 function buildWordCardHtml(w: Word): string {
-  const emojiEl = w.emoji
-    ? `<div class="word-card__emoji" aria-hidden="true">${escapeHtml(w.emoji)}</div>`
+  const emojiDisplay = w.emoji
+    ? `<div class="word-card__emoji" aria-hidden="true">${w.emoji}</div>`
     : `<div class="word-card__emoji word-card__emoji--placeholder" aria-hidden="true">📄</div>`;
 
   const meta = [
@@ -116,73 +184,64 @@ function buildWordCardHtml(w: Word): string {
   return `
     <li class="word-card" data-action="goto-detail" data-id="${escapeHtml(w.id)}"
         tabindex="0" role="button" aria-label="View definition of ${escapeHtml(w.term)}">
-      ${emojiEl}
+      ${emojiDisplay}
       <div class="word-card__body">
         <span class="word-card__term">${escapeHtml(w.term)}</span>
         <p class="word-card__preview">${escapeHtml(w.definition.slice(0, 80))}${w.definition.length > 80 ? '…' : ''}</p>
         ${meta ? `<div class="word-card__meta">${meta}</div>` : ''}
       </div>
-      <span class="word-card__arrow" aria-hidden="true">›</span>
+      <span class="word-card__arrow" aria-hidden="true">${icon('chevron-right', '', 18)}</span>
     </li>`;
 }
 
 function buildHubView(): string {
-  const words = getAllWords().sort((a, b) =>
+  const q = state.searchQuery;
+  const allWords = q ? searchWords(q) : getAllWords();
+  const words = allWords.sort((a, b) =>
     a.term.toLowerCase().localeCompare(b.term.toLowerCase()),
   );
 
-  if (words.length === 0) {
-    return `
-      <section class="view" id="view-hub">
-        <h2 class="view-title">Your Hub</h2>
-        <div class="empty-state">
-          <div class="empty-icon">📖</div>
+  const listHtml = words.length === 0
+    ? (q
+      ? `<p class="no-results">No words found for "<em>${escapeHtml(q)}</em>".</p>`
+      : `<div class="empty-state">
+          <div class="empty-icon">${icon('book-open', '', 48)}</div>
           <p class="empty-msg">Your personal encyclopedia is empty.<br>
-            Start by adding your first word!</p>
-          <button class="btn btn-primary" data-action="goto-add">＋ Add a Word</button>
-        </div>
-      </section>`;
-  }
+            Tap the button above to add your first word!</p>
+        </div>`)
+    : `<ul class="word-list" role="list">${words.map(buildWordCardHtml).join('')}</ul>`;
 
-  const items = words.map(buildWordCardHtml).join('');
   return `
     <section class="view" id="view-hub">
-      <h2 class="view-title">Your Hub <span class="count">${words.length}</span></h2>
-      <ul class="word-list" role="list">${items}</ul>
-    </section>`;
-}
-
-function buildSearchView(): string {
-  const q = state.searchQuery;
-  const results = searchWords(q).sort((a, b) =>
-    a.term.toLowerCase().localeCompare(b.term.toLowerCase()),
-  );
-
-  const listHtml =
-    q && results.length === 0
-      ? `<p class="no-results">No words found for "<em>${escapeHtml(q)}</em>".</p>`
-      : `<ul class="word-list" role="list">${results.map(buildWordCardHtml).join('')}</ul>`;
-
-  return `
-    <section class="view" id="view-search">
-      <h2 class="view-title">Search</h2>
-      <div class="search-bar">
-        <span class="search-bar__icon" aria-hidden="true">🔍</span>
-        <input id="search-input" class="search-bar__input" type="search"
-          placeholder="Word, definition, category, tag…"
-          value="${escapeHtml(q)}" autocomplete="off" aria-label="Search your hub" />
+      <div class="hub-toolbar">
+        <div class="search-bar">
+          <span class="search-bar__icon" aria-hidden="true">${icon('search', '', 18)}</span>
+          <input id="search-input" class="search-bar__input" type="search"
+            placeholder="Search words…"
+            value="${escapeHtml(q)}" autocomplete="off" aria-label="Search your hub" />
+        </div>
+        <button class="btn-add" data-action="goto-add" aria-label="Add a word">
+          ${icon('plus', '', 22)}
+        </button>
       </div>
-      <div id="search-results">
-        ${q || results.length ? listHtml : ''}
-      </div>
+      ${!q && words.length > 0 ? `<div class="hub-count">${words.length} word${words.length !== 1 ? 's' : ''}</div>` : ''}
+      <div id="search-results">${listHtml}</div>
     </section>`;
 }
 
 function buildAddView(): string {
+  // Assign a random emoji for new words
+  if (!formEmojiValue) formEmojiValue = randomEmoji();
   return `
     <section class="view" id="view-add">
+      <div class="view-header">
+        <button class="btn-back" data-action="goto-hub" aria-label="Back to hub">
+          ${icon('arrow-left', '', 20)} <span>Hub</span>
+        </button>
+      </div>
       <h2 class="view-title">Add a Word</h2>
       <form class="word-form" data-action="submit-add" novalidate>
+        ${renderEmojiField('add', formEmojiValue)}
         <div class="form-group">
           <label class="form-label" for="add-term">Word / Expression <span class="required">*</span></label>
           <input id="add-term" class="form-input" type="text" name="term"
@@ -192,11 +251,11 @@ function buildAddView(): string {
         <div class="form-group">
           <label class="form-label" for="add-def">Description <span class="required">*</span></label>
           <textarea id="add-def" class="form-textarea" name="definition"
-            placeholder="Describe what this word means to you…" rows="5" required></textarea>
+            placeholder="Describe what this word means to you…" rows="4" required></textarea>
           <span class="form-error" id="add-def-error" aria-live="polite"></span>
         </div>
+        ${renderSourceField('add')}
         ${renderCategoryField('add')}
-        ${renderEmojiField('add')}
         <div class="form-group">
           <label class="form-label" for="add-tags">Tags <span class="hint">(comma separated)</span></label>
           <input id="add-tags" class="form-input" type="text" name="tags"
@@ -209,17 +268,17 @@ function buildAddView(): string {
 
 function buildDetailView(word: Word): string {
   const emojiDisplay = word.emoji
-    ? `<div class="detail__emoji">${escapeHtml(word.emoji)}</div>`
+    ? `<div class="detail__emoji">${word.emoji}</div>`
     : '';
 
   return `
     <section class="view" id="view-detail">
-      <div class="detail-header">
+      <div class="view-header">
         <button class="btn-back" data-action="goto-hub" aria-label="Back to hub">
-          <span aria-hidden="true">←</span> Hub
+          ${icon('arrow-left', '', 20)} <span>Hub</span>
         </button>
-        <button class="btn-icon btn-edit" data-action="goto-edit" data-id="${escapeHtml(word.id)}" aria-label="Edit word">
-          ✏️
+        <button class="btn-icon-action" data-action="goto-edit" data-id="${escapeHtml(word.id)}" aria-label="Edit word">
+          ${icon('pencil', '', 18)}
         </button>
       </div>
       ${emojiDisplay}
@@ -227,26 +286,40 @@ function buildDetailView(word: Word): string {
       ${word.category ? `<div class="detail__category">${renderCategoryBadge(word.category)}</div>` : ''}
       ${word.tags.length ? `<div class="detail__tags">${renderTagChips(word.tags)}</div>` : ''}
       <div class="detail__definition">${escapeHtml(word.definition).replace(/\n/g, '<br>')}</div>
+      ${word.source ? `
+        <div class="detail__source">
+          ${icon('link-2', '', 14)}
+          <span>${escapeHtml(word.source)}</span>
+        </div>` : ''}
       <div class="detail__meta">
-        <span>Added ${formatDate(word.createdAt)}</span>
-        ${word.updatedAt !== word.createdAt ? `<span>· Updated ${formatDate(word.updatedAt)}</span>` : ''}
+        <div class="detail__meta-item">
+          ${icon('calendar', '', 14)}
+          <span>Added ${formatDate(word.createdAt)} at ${formatTime(word.createdAt)}</span>
+        </div>
+        ${word.updatedAt !== word.createdAt ? `
+          <div class="detail__meta-item">
+            ${icon('clock', '', 14)}
+            <span>Updated ${formatDate(word.updatedAt)} at ${formatTime(word.updatedAt)}</span>
+          </div>` : ''}
       </div>
       <button class="btn btn-danger btn-full" data-action="delete-word" data-id="${escapeHtml(word.id)}">
-        🗑 Delete Word
+        ${icon('trash-2', '', 16)} Delete Word
       </button>
     </section>`;
 }
 
 function buildEditView(word: Word): string {
+  formEmojiValue = word.emoji || randomEmoji();
   return `
     <section class="view" id="view-edit">
-      <div class="detail-header">
+      <div class="view-header">
         <button class="btn-back" data-action="goto-detail" data-id="${escapeHtml(word.id)}" aria-label="Cancel edit">
-          <span aria-hidden="true">←</span> Cancel
+          ${icon('arrow-left', '', 20)} <span>Cancel</span>
         </button>
       </div>
       <h2 class="view-title">Edit Word</h2>
       <form class="word-form" data-action="submit-edit" data-id="${escapeHtml(word.id)}" novalidate>
+        ${renderEmojiField('edit', formEmojiValue)}
         <div class="form-group">
           <label class="form-label" for="edit-term">Word / Expression <span class="required">*</span></label>
           <input id="edit-term" class="form-input" type="text" name="term"
@@ -255,11 +328,11 @@ function buildEditView(word: Word): string {
         </div>
         <div class="form-group">
           <label class="form-label" for="edit-def">Description <span class="required">*</span></label>
-          <textarea id="edit-def" class="form-textarea" name="definition" rows="5" required>${escapeHtml(word.definition)}</textarea>
+          <textarea id="edit-def" class="form-textarea" name="definition" rows="4" required>${escapeHtml(word.definition)}</textarea>
           <span class="form-error" id="edit-def-error" aria-live="polite"></span>
         </div>
+        ${renderSourceField('edit', word.source)}
         ${renderCategoryField('edit', word.category)}
-        ${renderEmojiField('edit', word.emoji)}
         <div class="form-group">
           <label class="form-label" for="edit-tags">Tags <span class="hint">(comma separated)</span></label>
           <input id="edit-tags" class="form-input" type="text" name="tags"
@@ -270,32 +343,6 @@ function buildEditView(word: Word): string {
     </section>`;
 }
 
-function buildNav(): string {
-  const tabs = [
-    { id: 'hub', icon: '🏠', label: 'Hub' },
-    { id: 'add', icon: '＋', label: 'Add' },
-    { id: 'search', icon: '🔍', label: 'Search' },
-  ] as const;
-
-  const activeView = ['detail', 'edit'].includes(state.currentView) ? 'hub' : state.currentView;
-
-  return `
-    <nav class="bottom-nav" role="navigation" aria-label="Main navigation">
-      ${tabs
-        .map(
-          (t) => `
-        <button class="nav-btn ${activeView === t.id ? 'nav-btn--active' : ''}"
-          data-action="goto-${t.id}"
-          aria-label="${t.label}"
-          ${activeView === t.id ? 'aria-current="page"' : ''}>
-          <span class="nav-btn__icon" aria-hidden="true">${t.icon}</span>
-          <span class="nav-btn__label">${t.label}</span>
-        </button>`,
-        )
-        .join('')}
-    </nav>`;
-}
-
 // ── Main render ────────────────────────────────────────────────────────────
 
 export function render(): void {
@@ -304,8 +351,6 @@ export function render(): void {
   let mainContent = '';
   if (state.currentView === 'hub') {
     mainContent = buildHubView();
-  } else if (state.currentView === 'search') {
-    mainContent = buildSearchView();
   } else if (state.currentView === 'add') {
     mainContent = buildAddView();
   } else if (state.currentView === 'detail' && state.selectedWordId) {
@@ -333,9 +378,9 @@ export function render(): void {
     <div class="shell">
       <header class="app-header">
         <div class="app-header__logo" aria-hidden="true">
-          <svg width="26" height="26" viewBox="0 0 24 24" fill="none">
-            <circle cx="12" cy="12" r="10" fill="var(--accent)"/>
-            <text x="12" y="16.5" text-anchor="middle" font-size="12" font-family="Georgia, serif"
+          <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+            <rect width="28" height="28" rx="8" fill="var(--accent)"/>
+            <text x="14" y="19.5" text-anchor="middle" font-size="14" font-family="Georgia, serif"
               fill="#fff" font-weight="bold">P</text>
           </svg>
         </div>
@@ -344,8 +389,10 @@ export function render(): void {
       <main class="main-content" id="main-content" role="main">
         ${mainContent}
       </main>
-      ${buildNav()}
     </div>`;
+
+  // Replace all <i data-lucide="..."> with SVGs
+  createIcons({ icons: ICON_REGISTRY });
 
   attachEventListeners();
 }
@@ -355,32 +402,43 @@ export function render(): void {
 function attachEventListeners(): void {
   const app = document.getElementById('app')!;
 
-  // Live search
+  // Live search on hub
   const searchInput = document.getElementById('search-input') as HTMLInputElement | null;
   if (searchInput) {
-    requestAnimationFrame(() => searchInput.focus());
+    if (state.currentView === 'hub' && !state.searchQuery) {
+      // Don't auto-focus on hub to avoid keyboard popping up on mobile
+    }
     searchInput.addEventListener('input', () => {
       state.searchQuery = searchInput.value;
       const resultsEl = document.getElementById('search-results');
       if (!resultsEl) return;
       const q = state.searchQuery;
-      const results = searchWords(q).sort((a, b) =>
+      const results = q ? searchWords(q) : getAllWords();
+      const sorted = results.sort((a, b) =>
         a.term.toLowerCase().localeCompare(b.term.toLowerCase()),
       );
-      if (!q) {
-        resultsEl.innerHTML = '';
-        return;
+
+      if (sorted.length === 0) {
+        resultsEl.innerHTML = q
+          ? `<p class="no-results">No words found for "<em>${escapeHtml(q)}</em>".</p>`
+          : `<div class="empty-state">
+              <div class="empty-icon"><i data-lucide="book-open" style="width:48px;height:48px"></i></div>
+              <p class="empty-msg">Your personal encyclopedia is empty.<br>
+                Tap the button above to add your first word!</p>
+            </div>`;
+      } else {
+        resultsEl.innerHTML = `<ul class="word-list" role="list">${sorted.map(buildWordCardHtml).join('')}</ul>`;
       }
-      if (results.length === 0) {
-        resultsEl.innerHTML = `<p class="no-results">No words found for "<em>${escapeHtml(q)}</em>".</p>`;
-        return;
+      // Update count
+      const countEl = document.querySelector('.hub-count');
+      if (countEl) {
+        countEl.textContent = q ? '' : `${sorted.length} word${sorted.length !== 1 ? 's' : ''}`;
       }
-      resultsEl.innerHTML = `<ul class="word-list" role="list">${results.map(buildWordCardHtml).join('')}</ul>`;
-      // delegation on #app already handles clicks inside results
+      createIcons({ icons: ICON_REGISTRY });
     });
   }
 
-  // Click / keyboard delegation (attached once per full render)
+  // Click / keyboard delegation
   app.addEventListener('click', handleAction);
   app.addEventListener('keydown', (e) => {
     const key = (e as KeyboardEvent).key;
@@ -388,6 +446,10 @@ function attachEventListeners(): void {
       handleAction(e as unknown as MouseEvent);
     }
   });
+
+  // Dialog lives outside #app — use a single global listener
+  document.removeEventListener('click', handleDialogAction);
+  document.addEventListener('click', handleDialogAction);
 }
 
 function handleAction(e: MouseEvent): void {
@@ -404,9 +466,6 @@ function handleAction(e: MouseEvent): void {
     case 'goto-add':
       navigate('add');
       break;
-    case 'goto-search':
-      navigate('search');
-      break;
     case 'goto-detail':
       if (id) navigate('detail', id);
       break;
@@ -419,24 +478,45 @@ function handleAction(e: MouseEvent): void {
         navigate('hub');
       }
       break;
-    case 'pick-emoji': {
-      // Fill the emoji input with the chosen emoji
-      const emoji = target.dataset.emoji;
+    case 'open-emoji-picker': {
       const targetInputId = target.dataset.target;
-      if (emoji && targetInputId) {
+      if (targetInputId) {
+        const input = document.getElementById(targetInputId) as HTMLInputElement | null;
+        const currentVal = input?.value ?? '';
+        // Inject dialog into DOM
+        const existing = document.querySelector('.emoji-dialog-backdrop');
+        if (existing) existing.remove();
+        const dialogHtml = buildEmojiDialog(currentVal, targetInputId);
+        document.body.insertAdjacentHTML('beforeend', dialogHtml);
+        createIcons({ icons: ICON_REGISTRY });
+        // Animate in
+        requestAnimationFrame(() => {
+          document.querySelector('.emoji-dialog-backdrop')?.classList.add('emoji-dialog-backdrop--open');
+        });
+      }
+      break;
+    }
+    case 'pick-category': {
+      const cat = target.dataset.category ?? '';
+      const targetInputId = target.dataset.target;
+      if (targetInputId) {
         const input = document.getElementById(targetInputId) as HTMLInputElement | null;
         if (input) {
-          input.value = emoji;
-          // highlight the selected button
-          const picker = input.closest('.form-group')?.nextElementSibling;
-          picker?.querySelectorAll<HTMLButtonElement>('.emoji-btn--selected').forEach((b) => {
-            b.classList.remove('emoji-btn--selected');
+          // Toggle: if already selected, clear it
+          if (input.value === cat) {
+            input.value = '';
+          } else {
+            input.value = cat;
+          }
+          // Update chip selection visuals
+          document.querySelectorAll<HTMLButtonElement>('.category-chip').forEach((c) => {
+            c.classList.toggle('category-chip--selected', c.dataset.category === input.value);
           });
-          target.classList.add('emoji-btn--selected');
         }
       }
       break;
     }
+    // select-emoji and close-emoji-picker handled by handleDialogAction (dialog is outside #app)
     case 'submit-add': {
       e.preventDefault();
       submitAddForm(target as HTMLFormElement);
@@ -450,6 +530,54 @@ function handleAction(e: MouseEvent): void {
   }
 }
 
+function handleDialogAction(e: MouseEvent): void {
+  const el = e.target as HTMLElement;
+  const backdrop = el.closest('.emoji-dialog-backdrop');
+  if (!backdrop) return;
+
+  const target = el.closest('[data-action]') as HTMLElement | null;
+  if (!target) return;
+
+  const action = target.dataset.action;
+  if (action === 'select-emoji') {
+    const emoji = target.dataset.emoji;
+    const targetInputId = target.dataset.target;
+    if (emoji && targetInputId) {
+      applyEmojiSelection(emoji, targetInputId);
+    }
+    closeEmojiDialog();
+  } else if (action === 'use-custom-emoji') {
+    const targetInputId = target.dataset.target;
+    const customInput = backdrop.querySelector<HTMLInputElement>('.emoji-dialog__input');
+    if (targetInputId && customInput && customInput.value.trim()) {
+      applyEmojiSelection(customInput.value.trim(), targetInputId);
+      closeEmojiDialog();
+    }
+  } else if (action === 'close-emoji-picker') {
+    closeEmojiDialog();
+  }
+}
+
+function applyEmojiSelection(emoji: string, targetInputId: string): void {
+  const input = document.getElementById(targetInputId) as HTMLInputElement | null;
+  if (input) {
+    input.value = emoji;
+    formEmojiValue = emoji;
+    const trigger = document.querySelector('.emoji-trigger__preview');
+    if (trigger) {
+      trigger.textContent = emoji;
+    }
+  }
+}
+
+function closeEmojiDialog(): void {
+  const backdrop = document.querySelector('.emoji-dialog-backdrop');
+  if (backdrop) {
+    backdrop.classList.remove('emoji-dialog-backdrop--open');
+    setTimeout(() => backdrop.remove(), 200);
+  }
+}
+
 // ── Form handlers ──────────────────────────────────────────────────────────
 
 function submitAddForm(form: HTMLFormElement): void {
@@ -458,6 +586,7 @@ function submitAddForm(form: HTMLFormElement): void {
   const categoryInput = form.querySelector<HTMLInputElement>('#add-category')!;
   const emojiInput = form.querySelector<HTMLInputElement>('#add-emoji')!;
   const tagsInput = form.querySelector<HTMLInputElement>('#add-tags')!;
+  const sourceInput = form.querySelector<HTMLInputElement>('#add-source')!;
 
   let valid = true;
   if (!termInput.value.trim()) {
@@ -480,6 +609,7 @@ function submitAddForm(form: HTMLFormElement): void {
     categoryInput.value,
     emojiInput.value,
     parseTags(tagsInput.value),
+    sourceInput.value,
   );
   navigate('hub');
 }
@@ -490,6 +620,7 @@ function submitEditForm(form: HTMLFormElement, wordId: string): void {
   const categoryInput = form.querySelector<HTMLInputElement>('#edit-category')!;
   const emojiInput = form.querySelector<HTMLInputElement>('#edit-emoji')!;
   const tagsInput = form.querySelector<HTMLInputElement>('#edit-tags')!;
+  const sourceInput = form.querySelector<HTMLInputElement>('#edit-source')!;
 
   let valid = true;
   if (!termInput.value.trim()) {
@@ -513,6 +644,7 @@ function submitEditForm(form: HTMLFormElement, wordId: string): void {
     categoryInput.value,
     emojiInput.value,
     parseTags(tagsInput.value),
+    sourceInput.value,
   );
   navigate('detail', wordId);
 }
