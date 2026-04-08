@@ -86,66 +86,77 @@ function randomEmoji(): string {
   return EMOJI_PICKS[Math.floor(Math.random() * EMOJI_PICKS.length)];
 }
 
-/** Generates random bright background blobs for memo stage */
+// Multi-color gradient pairs for vibrant blobs
+const BLOB_GRADIENTS = [
+  ['#ff6bd6', '#ffbd59'],           // pink → yellow
+  ['#cb5cff', '#ff6bd6'],            // purple → pink
+  ['#00e5ff', '#76ff7a'],           // cyan → green
+  ['#ff6b6b', '#ffbd59'],           // coral → amber
+  ['#536dfe', '#00e5ff'],           // indigo → cyan
+  ['#e040fb', '#7c4dff'],           // magenta → violet
+  ['#00e5ff', '#69f0ae'],           // cyan → mint
+  ['#ffab40', '#ff6e40', '#ff3d71'],// orange → red-pink
+  ['#76ff7a', '#00e5ff', '#536dfe'],// green → cyan → indigo
+  ['#ff6bd6', '#cb5cff', '#536dfe'], // pink → purple → indigo
+];
+
+// Non-overlapping zones for blob placement
+const BLOB_ZONES = [
+  { x: -10, y: -10 },  // top-left
+  { x: 55, y: -10 },   // top-right
+  { x: -10, y: 65 },   // bottom-left
+  { x: 55, y: 65 },    // bottom-right
+  { x: 20, y: 25 },    // center
+];
+
+const MEMO_BLOB_COUNT = 3;
+
+/** Builds placeholder blob elements (styles applied separately via applyBlobStyles) */
 function buildMemoBlobs(): string {
-  // Multi-color gradient pairs for vibrant blobs
-  const gradients = [
-    ['#ff6bd6', '#ffbd59'],           // pink → yellow
-    ['#cb5cff', '#ff6bd6'],            // purple → pink
-    ['#00e5ff', '#76ff7a'],           // cyan → green
-    ['#ff6b6b', '#ffbd59'],           // coral → amber
-    ['#536dfe', '#00e5ff'],           // indigo → cyan
-    ['#e040fb', '#7c4dff'],           // magenta → violet
-    ['#00e5ff', '#69f0ae'],           // cyan → mint
-    ['#ffab40', '#ff6e40', '#ff3d71'],// orange → red-pink
-    ['#76ff7a', '#00e5ff', '#536dfe'],// green → cyan → indigo
-    ['#ff6bd6', '#cb5cff', '#536dfe'], // pink → purple → indigo
-  ];
-
-  // Non-overlapping zones — pick 2-3 from these spread-out positions
-  const zones = [
-    { x: -10, y: -10 },  // top-left
-    { x: 55, y: -10 },   // top-right
-    { x: -10, y: 65 },   // bottom-left
-    { x: 55, y: 65 },    // bottom-right
-    { x: 20, y: 25 },    // center
-  ];
-
-  const count = 2 + Math.floor(Math.random() * 2); // 2-3 blobs
-  // Shuffle and pick zones to avoid overlap
-  const shuffled = zones.sort(() => Math.random() - 0.5).slice(0, count);
-
   let html = '';
-  for (let i = 0; i < count; i++) {
-    const grad = gradients[Math.floor(Math.random() * gradients.length)];
+  for (let i = 0; i < MEMO_BLOB_COUNT; i++) {
+    html += `<span class="memo-blob" id="memo-blob-${i}" aria-hidden="true"></span>`;
+  }
+  return html;
+}
+
+/** Apply randomized styles to existing blob elements. If animate=true, transitions are used. */
+function applyBlobStyles(animate: boolean): void {
+  const shuffled = [...BLOB_ZONES].sort(() => Math.random() - 0.5);
+
+  for (let i = 0; i < MEMO_BLOB_COUNT; i++) {
+    const el = document.getElementById(`memo-blob-${i}`);
+    if (!el) continue;
+
+    const grad = BLOB_GRADIENTS[Math.floor(Math.random() * BLOB_GRADIENTS.length)];
     const angle = Math.floor(Math.random() * 360);
     const stops = grad.map((c, idx) =>
       `${c} ${Math.round((idx / (grad.length - 1)) * 100)}%`
     ).join(', ');
-    const background = `linear-gradient(${angle}deg, ${stops})`;
 
     const size = 220 + Math.floor(Math.random() * 230); // 220-450px
-    // Add small jitter within the zone (±8%) to keep it organic but non-overlapping
-    const x = shuffled[i].x + Math.floor(Math.random() * 16 - 8);
-    const y = shuffled[i].y + Math.floor(Math.random() * 16 - 8);
+    const zone = shuffled[i];
+    const x = zone.x + Math.floor(Math.random() * 16 - 8);
+    const y = zone.y + Math.floor(Math.random() * 16 - 8);
 
-    // Organic shape with 8-value border-radius
     const r = () => 30 + Math.floor(Math.random() * 45);
     const borderRadius = `${r()}% ${r()}% ${r()}% ${r()}% / ${r()}% ${r()}% ${r()}% ${r()}%`;
-
     const rotate = Math.floor(Math.random() * 360);
 
-    html += `<span class="memo-blob" style="
-      width: ${size}px;
-      height: ${size}px;
-      left: ${x}%;
-      top: ${y}%;
-      background: ${background};
-      border-radius: ${borderRadius};
-      transform: rotate(${rotate}deg);
-    " aria-hidden="true"></span>`;
+    if (animate) {
+      el.style.transition = 'width 1.2s ease, height 1.2s ease, left 1.2s ease, top 1.2s ease, border-radius 1.2s ease, transform 1.2s ease';
+    } else {
+      el.style.transition = 'none';
+    }
+
+    el.style.width = `${size}px`;
+    el.style.height = `${size}px`;
+    el.style.left = `${x}%`;
+    el.style.top = `${y}%`;
+    el.style.background = `linear-gradient(${angle}deg, ${stops})`;
+    el.style.borderRadius = borderRadius;
+    el.style.transform = `rotate(${rotate}deg)`;
   }
-  return html;
 }
 
 /** Debounce timer for source suggestions */
@@ -587,11 +598,8 @@ function buildMemoView(): string {
           <span class="memo-card__type">${clueLabel}</span>
           <p class="memo-card__text">${escapeHtml(clueText)}</p>
           <span class="memo-card__hint">← swipe to reveal word →</span>
+          <span class="memo-card__chevron">${icon('chevron-up', '', 20)}</span>
         </div>
-      </div>
-      <div class="memo-up-hint">
-        ${icon('chevron-up', '', 18)}
-        <span>Swipe up for next card</span>
       </div>
     </section>`;
 }
@@ -682,16 +690,46 @@ function attachMemoTouchHandlers(): void {
         reveal.style.opacity = '1';
       }
     } else if (dir === 'y' && dy < -80) {
-      // Next card — slide up
+      // Next card — slide up, then morph blobs & update card content
       const el = memoRevealed ? reveal : card;
       if (el) {
         el.style.transition = ease;
         el.style.transform = 'translateY(-500px)';
         el.style.opacity = '0';
       }
+      // Start blob morph immediately while card slides out
+      applyBlobStyles(true);
       setTimeout(() => {
         pickNextMemoWord();
-        render();
+        if (!memoWord) { render(); return; }
+        // Update card content in-place
+        const clueText = memoShowField === 'meaning' ? memoWord.meaning : memoWord.definition;
+        const clueLabel = memoShowField === 'meaning' ? 'Meaning' : 'Description';
+        const emojiDisplay = memoWord.emoji || '📄';
+        const typeEl = document.querySelector('.memo-card__type');
+        const textEl = document.querySelector('.memo-card__text');
+        const revealEmoji = document.querySelector('.memo-reveal__emoji');
+        const revealTerm = document.querySelector('.memo-reveal__term');
+        if (typeEl) typeEl.textContent = clueLabel;
+        if (textEl) textEl.textContent = clueText;
+        if (revealEmoji) revealEmoji.textContent = emojiDisplay;
+        if (revealTerm) revealTerm.textContent = memoWord.term;
+        // Reset card position
+        if (card) {
+          card.style.transition = 'none';
+          card.style.transform = 'translateY(500px)';
+          card.style.opacity = '0';
+          void card.offsetHeight; // force reflow
+          card.style.transition = ease;
+          card.style.transform = 'translateX(0) rotate(0deg)';
+          card.style.opacity = '1';
+        }
+        // Reset reveal
+        if (reveal) {
+          reveal.style.transition = 'none';
+          reveal.style.opacity = '0';
+          reveal.style.transform = 'translateY(0)';
+        }
       }, 300);
     } else {
       // Snap back
@@ -851,8 +889,9 @@ function attachEventListeners(): void {
     }
   });
 
-  // Memo card touch gestures
+  // Memo card touch gestures + initial blob styles
   if (state.currentView === 'memo') {
+    applyBlobStyles(false);
     attachMemoTouchHandlers();
   }
 

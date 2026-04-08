@@ -946,13 +946,13 @@ html, body {
 
 .memo-card {
   width: 100%;
-  max-width: 380px;
-  min-height: 340px;
+  max-width: 460px;
+  min-height: 420px;
   background: rgba(255, 255, 255, .08);
   -webkit-backdrop-filter: blur(64px) saturate(1.6);
   backdrop-filter: blur(64px) saturate(1.6);
-  border-radius: 24px;
-  padding: 40px 28px;
+  border-radius: 28px;
+  padding: 48px 32px 36px;
   border: 1px solid rgba(255, 255, 255, .15);
   box-shadow:
     0 8px 40px rgba(0, 0, 0, .35),
@@ -961,7 +961,7 @@ html, body {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 24px;
+  gap: 28px;
   position: relative;
   z-index: 1;
   will-change: transform, opacity;
@@ -979,13 +979,13 @@ html, body {
 }
 
 .memo-card__type {
-  font-size: .72rem;
-  font-weight: 700;
+  font-size: .82rem;
+  font-weight: 800;
   text-transform: uppercase;
-  letter-spacing: .1em;
-  color: rgba(255, 255, 255, .7);
+  letter-spacing: .12em;
+  color: rgba(255, 255, 255, .75);
   background: rgba(255, 255, 255, .1);
-  padding: 6px 18px;
+  padding: 7px 20px;
   border-radius: 100px;
   border: 1px solid rgba(255, 255, 255, .15);
   position: relative;
@@ -993,23 +993,33 @@ html, body {
 }
 
 .memo-card__text {
-  font-size: 1.1rem;
-  line-height: 1.8;
-  color: rgba(255, 255, 255, .9);
+  font-size: 1.45rem;
+  line-height: 1.7;
+  color: #fff;
   text-align: center;
   overflow-y: auto;
-  max-height: 220px;
+  max-height: 260px;
   position: relative;
   z-index: 2;
-  font-weight: 500;
+  font-weight: 700;
 }
 
 .memo-card__hint {
-  font-size: .78rem;
+  font-size: .82rem;
   color: rgba(255, 255, 255, .4);
   position: relative;
   z-index: 2;
   letter-spacing: .02em;
+}
+
+.memo-card__chevron {
+  position: absolute;
+  bottom: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  color: rgba(255, 255, 255, .3);
+  z-index: 2;
+  animation: memo-bounce 2s ease-in-out infinite;
 }
 
 .memo-up-hint {
