@@ -38,7 +38,7 @@ npm run preview      # preview production build
 |------|---------|
 | Node.js | ≥ 18 |
 | Android Studio | latest |
-| Java (JDK) | 17 |
+| Java (JDK) | 21 |
 
 ### Steps
 
