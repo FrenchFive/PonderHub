@@ -102,7 +102,19 @@ function buildMemoBlobs(): string {
     ['#ff6bd6', '#cb5cff', '#536dfe'], // pink → purple → indigo
   ];
 
-  const count = 4 + Math.floor(Math.random() * 3); // 4-6 blobs
+  // Non-overlapping zones — pick 2-3 from these spread-out positions
+  const zones = [
+    { x: -10, y: -10 },  // top-left
+    { x: 55, y: -10 },   // top-right
+    { x: -10, y: 65 },   // bottom-left
+    { x: 55, y: 65 },    // bottom-right
+    { x: 20, y: 25 },    // center
+  ];
+
+  const count = 2 + Math.floor(Math.random() * 2); // 2-3 blobs
+  // Shuffle and pick zones to avoid overlap
+  const shuffled = zones.sort(() => Math.random() - 0.5).slice(0, count);
+
   let html = '';
   for (let i = 0; i < count; i++) {
     const grad = gradients[Math.floor(Math.random() * gradients.length)];
@@ -112,17 +124,15 @@ function buildMemoBlobs(): string {
     ).join(', ');
     const background = `linear-gradient(${angle}deg, ${stops})`;
 
-    const size = 100 + Math.floor(Math.random() * 200); // 100-300px
-    const x = -15 + Math.floor(Math.random() * 110);
-    const y = -15 + Math.floor(Math.random() * 110);
+    const size = 220 + Math.floor(Math.random() * 230); // 220-450px
+    // Add small jitter within the zone (±8%) to keep it organic but non-overlapping
+    const x = shuffled[i].x + Math.floor(Math.random() * 16 - 8);
+    const y = shuffled[i].y + Math.floor(Math.random() * 16 - 8);
 
     // Organic shape with 8-value border-radius
     const r = () => 30 + Math.floor(Math.random() * 45);
     const borderRadius = `${r()}% ${r()}% ${r()}% ${r()}% / ${r()}% ${r()}% ${r()}% ${r()}%`;
 
-    // Vary aspect ratio for some blobs
-    const scaleX = 0.7 + Math.random() * 0.6;
-    const scaleY = 0.7 + Math.random() * 0.6;
     const rotate = Math.floor(Math.random() * 360);
 
     html += `<span class="memo-blob" style="
@@ -132,7 +142,7 @@ function buildMemoBlobs(): string {
       top: ${y}%;
       background: ${background};
       border-radius: ${borderRadius};
-      transform: rotate(${rotate}deg) scale(${scaleX.toFixed(2)}, ${scaleY.toFixed(2)});
+      transform: rotate(${rotate}deg);
     " aria-hidden="true"></span>`;
   }
   return html;

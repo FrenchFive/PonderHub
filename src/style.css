@@ -949,8 +949,8 @@ html, body {
   max-width: 380px;
   min-height: 340px;
   background: rgba(255, 255, 255, .08);
-  -webkit-backdrop-filter: blur(24px) saturate(1.4);
-  backdrop-filter: blur(24px) saturate(1.4);
+  -webkit-backdrop-filter: blur(64px) saturate(1.6);
+  backdrop-filter: blur(64px) saturate(1.6);
   border-radius: 24px;
   padding: 40px 28px;
   border: 1px solid rgba(255, 255, 255, .15);
@@ -975,8 +975,7 @@ html, body {
   position: absolute;
   pointer-events: none;
   z-index: 0;
-  filter: blur(2px);
-  opacity: .85;
+  opacity: 1;
 }
 
 .memo-card__type {
