@@ -932,7 +932,7 @@ function buildMemoView(): string {
           <span class="memo-reveal__emoji">${emojiDisplay}</span>
           <span class="memo-reveal__term">${escapeHtml(memoWord.term)}</span>
           ${memoWord.example ? `<span class="memo-reveal__example">"${escapeHtml(memoWord.example)}"</span>` : ''}
-          <span class="memo-reveal__hint">↑ swipe up for next</span>
+          <span class="memo-reveal__hint">← swipe to go back · ↑ swipe up for next</span>
         </div>
         <div class="memo-card" id="memo-card">
           ${memoWord.category ? `<span class="memo-card__category">${escapeHtml(memoWord.category)}</span>` : ''}
@@ -1118,7 +1118,7 @@ function attachMemoTouchHandlers(): void {
     const card = document.getElementById('memo-card');
     if (card) card.style.transition = 'none';
     const reveal = document.getElementById('memo-reveal');
-    if (reveal && memoRevealed) reveal.style.transition = 'none';
+    if (reveal) reveal.style.transition = 'none';
   }, { passive: true });
 
   stage.addEventListener('touchmove', (e) => {
@@ -1132,12 +1132,22 @@ function attachMemoTouchHandlers(): void {
     if (!dir) return;
     e.preventDefault();
 
-    if (!memoRevealed && dir === 'x') {
-      const card = document.getElementById('memo-card');
-      if (card) {
-        const rot = dx * 0.06;
-        card.style.transform = `translateX(${dx}px) rotate(${rot}deg)`;
-        card.style.opacity = `${Math.max(0.2, 1 - Math.abs(dx) / 300)}`;
+    if (dir === 'x') {
+      if (!memoRevealed) {
+        // Swipe card to reveal answer
+        const card = document.getElementById('memo-card');
+        if (card) {
+          const rot = dx * 0.06;
+          card.style.transform = `translateX(${dx}px) rotate(${rot}deg)`;
+          card.style.opacity = `${Math.max(0.2, 1 - Math.abs(dx) / 300)}`;
+        }
+      } else {
+        // Swipe reveal to bring card back
+        const reveal = document.getElementById('memo-reveal');
+        if (reveal) {
+          reveal.style.transform = `translateX(${dx}px)`;
+          reveal.style.opacity = `${Math.max(0.2, 1 - Math.abs(dx) / 300)}`;
+        }
       }
     } else if (dir === 'y' && dy < 0) {
       const el = memoRevealed
@@ -1153,21 +1163,41 @@ function attachMemoTouchHandlers(): void {
   stage.addEventListener('touchend', () => {
     const card = document.getElementById('memo-card');
     const reveal = document.getElementById('memo-reveal');
-    const ease = 'transform .3s ease, opacity .3s ease';
+    const fast = 'transform .18s ease, opacity .18s ease';
 
     if (!memoRevealed && dir === 'x' && Math.abs(dx) > 80) {
       // Reveal word — slide card off
       haptic('Medium');
       if (card) {
-        card.style.transition = ease;
+        card.style.transition = fast;
         const exitX = dx > 0 ? 400 : -400;
         card.style.transform = `translateX(${exitX}px) rotate(${exitX * 0.06}deg)`;
         card.style.opacity = '0';
       }
       memoRevealed = true;
       if (reveal) {
-        reveal.style.transition = 'opacity .3s ease .15s';
+        reveal.style.transition = 'opacity .2s ease .1s';
         reveal.style.opacity = '1';
+        reveal.style.transform = 'translateX(0)';
+      }
+    } else if (memoRevealed && dir === 'x' && Math.abs(dx) > 80) {
+      // Un-reveal — slide reveal off, bring card back
+      haptic('Medium');
+      if (reveal) {
+        reveal.style.transition = fast;
+        const exitX = dx > 0 ? 400 : -400;
+        reveal.style.transform = `translateX(${exitX}px)`;
+        reveal.style.opacity = '0';
+      }
+      memoRevealed = false;
+      if (card) {
+        card.style.transition = 'none';
+        card.style.transform = `translateX(${dx > 0 ? -300 : 300}px) rotate(0deg)`;
+        card.style.opacity = '0';
+        void card.offsetHeight;
+        card.style.transition = 'transform .2s ease .08s, opacity .2s ease .08s';
+        card.style.transform = 'translateX(0) rotate(0deg)';
+        card.style.opacity = '1';
       }
     } else if (dir === 'y' && dy < -80) {
       // Next card — slide up, then morph blobs & update card content
@@ -1175,7 +1205,7 @@ function attachMemoTouchHandlers(): void {
       haptic('Light');
       const el = memoRevealed ? reveal : card;
       if (el) {
-        el.style.transition = ease;
+        el.style.transition = fast;
         el.style.transform = 'translateY(-500px)';
         el.style.opacity = '0';
       }
@@ -1214,13 +1244,13 @@ function attachMemoTouchHandlers(): void {
             (revealExample as HTMLElement).style.display = 'none';
           }
         }
-        // Reset card position
+        // Reset card — slide in from below, fast
         if (card) {
           card.style.transition = 'none';
-          card.style.transform = 'translateY(500px)';
+          card.style.transform = 'translateY(400px)';
           card.style.opacity = '0';
-          void card.offsetHeight; // force reflow
-          card.style.transition = ease;
+          void card.offsetHeight;
+          card.style.transition = 'transform .2s ease, opacity .2s ease';
           card.style.transform = 'translateX(0) rotate(0deg)';
           card.style.opacity = '1';
         }
@@ -1228,20 +1258,25 @@ function attachMemoTouchHandlers(): void {
         if (reveal) {
           reveal.style.transition = 'none';
           reveal.style.opacity = '0';
-          reveal.style.transform = 'translateY(0)';
+          reveal.style.transform = 'translateX(0)';
         }
-      }, 300);
+      }, 150);
     } else {
       // Snap back
       if (!memoRevealed && card) {
-        card.style.transition = ease;
+        card.style.transition = fast;
         card.style.transform = 'translateX(0) rotate(0deg)';
         card.style.opacity = '1';
       }
-      if (memoRevealed && reveal && dir === 'y') {
-        reveal.style.transition = ease;
-        reveal.style.transform = 'translateY(0)';
+      if (memoRevealed && reveal) {
+        reveal.style.transition = fast;
+        reveal.style.transform = 'translateX(0)';
         reveal.style.opacity = '1';
+      }
+      if (!memoRevealed && card && dir === 'y') {
+        card.style.transition = fast;
+        card.style.transform = 'translateX(0) rotate(0deg)';
+        card.style.opacity = '1';
       }
     }
   });
