@@ -118,6 +118,39 @@ export function deleteWord(id: string): void {
   saveAll(words);
 }
 
+/** Import words from a JSON array. Skips duplicates (by id). Returns count of newly added words. */
+export function importWords(imported: Partial<Word>[]): number {
+  const existing = getAllWords();
+  const existingIds = new Set(existing.map((w) => w.id));
+  let count = 0;
+  for (const raw of imported) {
+    if (!raw || typeof raw !== 'object') continue;
+    // Require at least a term
+    if (!raw.term || typeof raw.term !== 'string') continue;
+    // Skip if id already exists
+    if (raw.id && existingIds.has(raw.id)) continue;
+    const word: Word = {
+      id: raw.id && typeof raw.id === 'string' ? raw.id : generateId(),
+      term: String(raw.term ?? '').trim(),
+      meaning: String(raw.meaning ?? '').trim(),
+      definition: String(raw.definition ?? '').trim(),
+      example: String(raw.example ?? '').trim(),
+      category: String(raw.category ?? '').trim(),
+      emoji: String(raw.emoji ?? '').trim(),
+      tags: Array.isArray(raw.tags) ? raw.tags.map(String).filter(Boolean) : [],
+      linkedWords: Array.isArray(raw.linkedWords) ? raw.linkedWords.map(String).filter(Boolean) : [],
+      source: String(raw.source ?? '').trim(),
+      createdAt: typeof raw.createdAt === 'number' ? raw.createdAt : Date.now(),
+      updatedAt: typeof raw.updatedAt === 'number' ? raw.updatedAt : Date.now(),
+    };
+    existing.push(word);
+    existingIds.add(word.id);
+    count++;
+  }
+  saveAll(existing);
+  return count;
+}
+
 export function getWord(id: string): Word | null {
   return getAllWords().find((w) => w.id === id) ?? null;
 }

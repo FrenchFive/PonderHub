@@ -13,18 +13,19 @@ import {
   savePreferences,
   getStats,
   incrementCardsSwiped,
+  importWords,
 } from './storage';
 import { createIcons,
   ArrowLeft, Plus, Search, Pencil, Trash2, ChevronRight, BookOpen,
   FileText, Calendar, Link2, Clock, X, Layers, ChevronUp, SlidersHorizontal,
-  ChevronDown, FolderPlus, Settings, Share2, Bell, BellOff,
+  ChevronDown, FolderPlus, Settings, Share2, Bell, BellOff, Download, Upload,
 } from 'lucide';
 
 // ── Icon registry for createIcons (UI only) ──────────────────────────────
 const ICON_REGISTRY = {
   ArrowLeft, Plus, Search, Pencil, Trash2, ChevronRight, BookOpen,
   FileText, Calendar, Link2, Clock, X, Layers, ChevronUp, SlidersHorizontal,
-  ChevronDown, FolderPlus, Settings, Share2, Bell, BellOff,
+  ChevronDown, FolderPlus, Settings, Share2, Bell, BellOff, Download, Upload,
 };
 
 const APP_VERSION = '0.9.0';
@@ -951,20 +952,13 @@ function buildSettingsView(): string {
   const categories = getCategories();
   const timeVal = `${String(prefs.notificationHour).padStart(2, '0')}:${String(prefs.notificationMinute).padStart(2, '0')}`;
 
-  const catToggles = categories.length > 0
+  const catChips = categories.length > 0
     ? categories.map((c) => {
         const excluded = prefs.excludedCategories.includes(c);
-        return `
-          <div class="settings-row">
-            <span class="settings-row__label">${escapeHtml(c)}</span>
-            <label class="toggle">
-              <input type="checkbox" data-action="toggle-exclude-cat" data-category="${escapeHtml(c)}"
-                ${excluded ? '' : 'checked'} />
-              <span class="toggle__track"></span>
-            </label>
-          </div>`;
+        return `<button type="button" class="excl-chip ${excluded ? 'excl-chip--off' : ''}"
+          data-action="toggle-exclude-cat" data-category="${escapeHtml(c)}">${escapeHtml(c)}</button>`;
       }).join('')
-    : '<p class="settings-hint">No categories yet. Add some words first!</p>';
+    : '<p class="settings-hint" style="padding:14px 16px">No categories yet. Add some words first!</p>';
 
   return `
     <section class="view" id="view-settings">
@@ -1014,10 +1008,36 @@ function buildSettingsView(): string {
       <!-- Category exclusions -->
       <div class="settings-section">
         <h3 class="settings-section__title">${icon('layers', '', 16)} Memo & Notification Categories</h3>
-        <p class="settings-hint">Toggle off to exclude from Memo and daily notifications</p>
-        <div class="settings-card">
-          ${catToggles}
+        <p class="settings-hint">Tap a category to exclude it from Memo and daily notifications</p>
+        <div class="settings-card excl-chips-wrap">
+          ${catChips}
         </div>
+      </div>
+
+      <!-- Data -->
+      <div class="settings-section">
+        <h3 class="settings-section__title">${icon('download', '', 16)} Data</h3>
+        <div class="settings-card">
+          <div class="settings-row">
+            <div class="settings-row__info">
+              <span class="settings-row__label">Export Words</span>
+              <span class="settings-row__hint">Download all your words as a JSON file</span>
+            </div>
+            <button type="button" class="btn-settings-action" data-action="export-data" aria-label="Export data">
+              ${icon('download', '', 18)}
+            </button>
+          </div>
+          <div class="settings-row">
+            <div class="settings-row__info">
+              <span class="settings-row__label">Import Words</span>
+              <span class="settings-row__hint">Load words from a JSON file</span>
+            </div>
+            <button type="button" class="btn-settings-action" data-action="import-data" aria-label="Import data">
+              ${icon('upload', '', 18)}
+            </button>
+          </div>
+        </div>
+        <input type="file" id="import-file-input" accept=".json,application/json" style="display:none" />
       </div>
 
       <!-- About -->
@@ -2058,24 +2078,74 @@ function attachSettingsListeners(): void {
     });
   }
 
-  // Category exclusion toggles
-  document.querySelectorAll<HTMLInputElement>('[data-action="toggle-exclude-cat"]').forEach((toggle) => {
-    toggle.addEventListener('change', () => {
-      const cat = toggle.dataset.category;
+  // Category exclusion chips (tap to toggle)
+  document.querySelectorAll<HTMLButtonElement>('[data-action="toggle-exclude-cat"]').forEach((chip) => {
+    chip.addEventListener('click', () => {
+      const cat = chip.dataset.category;
       if (!cat) return;
       const prefs = getPreferences();
-      if (toggle.checked) {
-        // Checked = included (not excluded)
+      const isExcluded = prefs.excludedCategories.includes(cat);
+      if (isExcluded) {
         prefs.excludedCategories = prefs.excludedCategories.filter((c) => c !== cat);
+        chip.classList.remove('excl-chip--off');
       } else {
-        // Unchecked = excluded
-        if (!prefs.excludedCategories.includes(cat)) prefs.excludedCategories.push(cat);
+        prefs.excludedCategories.push(cat);
+        chip.classList.add('excl-chip--off');
       }
       savePreferences(prefs);
       haptic('Light');
       scheduleWordNotifications();
     });
   });
+
+  // Export data
+  const exportBtn = document.querySelector('[data-action="export-data"]') as HTMLElement | null;
+  if (exportBtn) {
+    exportBtn.addEventListener('click', () => {
+      const words = getAllWords();
+      const data = JSON.stringify(words, null, 2);
+      const blob = new Blob([data], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `ponderhub-export-${new Date().toISOString().slice(0, 10)}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      haptic('Medium');
+    });
+  }
+
+  // Import data
+  const importBtn = document.querySelector('[data-action="import-data"]') as HTMLElement | null;
+  const fileInput = document.getElementById('import-file-input') as HTMLInputElement | null;
+  if (importBtn && fileInput) {
+    importBtn.addEventListener('click', () => fileInput.click());
+    fileInput.addEventListener('change', () => {
+      const file = fileInput.files?.[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        try {
+          const imported = JSON.parse(reader.result as string);
+          if (!Array.isArray(imported)) {
+            alert('Invalid file: expected an array of words.');
+            return;
+          }
+          const count = importWords(imported);
+          haptic('Medium');
+          alert(`Imported ${count} word${count !== 1 ? 's' : ''} successfully.`);
+          render();
+        } catch {
+          alert('Failed to parse file. Make sure it is a valid PonderHub JSON export.');
+        }
+      };
+      reader.readAsText(file);
+      // Reset so the same file can be re-selected
+      fileInput.value = '';
+    });
+  }
 }
 
 // ── Form handlers ──────────────────────────────────────────────────────────

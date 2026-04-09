@@ -1886,6 +1886,65 @@ html, body {
   box-shadow: var(--neu-inset), 0 0 0 2px var(--accent-soft);
 }
 
+/* ── Settings action button (export/import) ─────────────────────────────── */
+.btn-settings-action {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-sm);
+  border: none;
+  background: var(--accent-soft);
+  color: var(--accent);
+  cursor: pointer;
+  box-shadow: var(--shadow-sm);
+  transition: transform .1s, background .15s;
+  flex-shrink: 0;
+}
+
+.btn-settings-action:active {
+  transform: scale(.9);
+  background: var(--accent);
+  color: #fff;
+}
+
+/* ── Exclusion chips (compact multi-select) ─────────────────────────────── */
+.excl-chips-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 14px 16px;
+}
+
+.excl-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 7px 14px;
+  border-radius: 100px;
+  border: 1.5px solid var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: .8rem;
+  font-weight: 600;
+  font-family: var(--font);
+  cursor: pointer;
+  transition: all .15s;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.excl-chip:active {
+  transform: scale(.93);
+}
+
+.excl-chip--off {
+  border-color: var(--border);
+  background: transparent;
+  color: var(--text-secondary);
+  text-decoration: line-through;
+  opacity: .65;
+}
+
 /* ── Toggle switch ──────────────────────────────────────────────────────── */
 .toggle {
   position: relative;
