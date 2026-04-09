@@ -13,7 +13,7 @@ export interface Word {
   updatedAt: number;
 }
 
-export type View = 'hub' | 'add' | 'detail' | 'edit' | 'memo';
+export type View = 'hub' | 'add' | 'detail' | 'edit' | 'memo' | 'settings' | 'map';
 
 export interface AppState {
   currentView: View;
@@ -21,4 +21,15 @@ export interface AppState {
   searchQuery: string;
   filterCategory: string;
   filterSource: string;
+}
+
+export interface Preferences {
+  notificationsEnabled: boolean;
+  notificationHour: number;
+  notificationMinute: number;
+  excludedCategories: string[];
+}
+
+export interface Stats {
+  totalCardsSwiped: number;
 }

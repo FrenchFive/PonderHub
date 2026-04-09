@@ -1,10 +1,14 @@
-import type { Word } from './types';
+import type { Word, Preferences, Stats } from './types';
 
 const STORAGE_KEY = 'ponderhub_words';
+const PREFS_KEY = 'ponderhub_prefs';
+const STATS_KEY = 'ponderhub_stats';
 
 function generateId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 }
+
+// ── Words CRUD ────────────────────────────────────────────────────────────
 
 export function getAllWords(): Word[] {
   try {
@@ -142,4 +146,47 @@ export function searchWords(query: string): Word[] {
       w.tags.some((t) => t.toLowerCase().includes(q)) ||
       w.source.toLowerCase().includes(q),
   );
+}
+
+// ── Preferences ────────────────────────────────────────────────────────────
+
+const DEFAULT_PREFS: Preferences = {
+  notificationsEnabled: false,
+  notificationHour: 10,
+  notificationMinute: 0,
+  excludedCategories: [],
+};
+
+export function getPreferences(): Preferences {
+  try {
+    const raw = localStorage.getItem(PREFS_KEY);
+    if (!raw) return { ...DEFAULT_PREFS };
+    return { ...DEFAULT_PREFS, ...JSON.parse(raw) };
+  } catch {
+    return { ...DEFAULT_PREFS };
+  }
+}
+
+export function savePreferences(prefs: Preferences): void {
+  localStorage.setItem(PREFS_KEY, JSON.stringify(prefs));
+}
+
+// ── Stats ──────────────────────────────────────────────────────────────────
+
+const DEFAULT_STATS: Stats = { totalCardsSwiped: 0 };
+
+export function getStats(): Stats {
+  try {
+    const raw = localStorage.getItem(STATS_KEY);
+    if (!raw) return { ...DEFAULT_STATS };
+    return { ...DEFAULT_STATS, ...JSON.parse(raw) };
+  } catch {
+    return { ...DEFAULT_STATS };
+  }
+}
+
+export function incrementCardsSwiped(): void {
+  const stats = getStats();
+  stats.totalCardsSwiped++;
+  localStorage.setItem(STATS_KEY, JSON.stringify(stats));
 }
