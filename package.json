@@ -12,6 +12,7 @@
     "cap:android": "npm run build && npx cap sync android && npx cap open android"
   },
   "dependencies": {
+    "@capacitor/app": "^7.1.2",
     "@capacitor/core": "^7.0.0",
     "lucide": "^1.7.0"
   },

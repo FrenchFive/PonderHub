@@ -205,20 +205,34 @@ function closeOpenOverlays(): boolean {
   return closed;
 }
 
+/** Shared back-button logic: close overlay → navigate back → exit app.
+ *  Returns true if the event was consumed (do NOT exit). */
+function handleBack(): boolean {
+  // 1. Close any open overlay without navigating
+  if (closeOpenOverlays()) return true;
+
+  // 2. Navigate back if we're not on the hub
+  if (state.currentView !== 'hub') {
+    navigate('hub');
+    return true;
+  }
+
+  // 3. At root — let the caller decide (exit app / default behaviour)
+  return false;
+}
+
 /** Handle browser back button / Android back gesture */
 export function initHistoryNavigation(): void {
   // Set initial state
   history.replaceState({ view: state.currentView, wordId: state.selectedWordId }, '');
 
+  // ── Browser / PWA popstate fallback ──
   window.addEventListener('popstate', (e) => {
-    // First: close any open overlay without navigating
     if (closeOpenOverlays()) {
-      // Re-push current state so the next back press navigates
       history.pushState({ view: state.currentView, wordId: state.selectedWordId }, '');
       return;
     }
 
-    // If there's a saved state, restore it
     if (e.state && e.state.view) {
       state.currentView = e.state.view;
       state.selectedWordId = e.state.wordId ?? null;
@@ -226,9 +240,24 @@ export function initHistoryNavigation(): void {
       render();
       return;
     }
-
-    // No state — we're at the root, let the browser handle (exit app)
   });
+
+  // ── Capacitor Android hardware back button ──
+  initCapacitorBackButton();
+}
+
+async function initCapacitorBackButton(): Promise<void> {
+  try {
+    const { App } = await import('@capacitor/app');
+    App.addListener('backButton', () => {
+      if (!handleBack()) {
+        // At root with nothing to close — exit the app
+        App.exitApp();
+      }
+    });
+  } catch {
+    // Not running in Capacitor — popstate handler above covers the browser
+  }
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────
